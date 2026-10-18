@@ -1,0 +1,32 @@
+flowchart TB
+  P(("Prospect"))
+  TW["Twilio<br/>call, recording, voicemail detection"]
+  A(("Licensed agent<br/>(your transfer number)"))
+  TUN{{"Cloudflare tunnel<br/>only 3 Twilio paths,<br/>signature + secret"}}
+  DIAL["Dialer<br/>dialer.mjs"]
+  SRV["Server + Twilio bridge<br/>server.mjs, bridge.mjs"]
+  SES["Bot session + 9 tools<br/>session.mjs, prompt.mjs,<br/>quote.mjs, verify.mjs"]
+  GROK["xAI Grok Voice 3.0"]
+  HUB["Call hub + gates<br/>hub.mjs, call-state.mjs, flow.mjs"]
+  DASH["Mission Control /v2<br/>+ event logs"]
+  VAULT[("Vault<br/>AES-256-GCM, 72h")]
+  LOOK["Public lookups<br/>bank directory, Census"]
+  SYNC["CRM adapter + transfer<br/>crm/index.mjs, transfer.mjs"]
+  CRM[("CRM adapter (CSV by default, or DSB)<br/>lead queue + outcomes")]
+
+  CRM -->|"1. queued leads"| DIAL
+  DIAL -->|"2. create call"| TW
+  TW <-->|"3. voice"| P
+  TW <-->|"4. call audio"| TUN
+  TUN <--> SRV
+  SRV <--> SES
+  SES <-->|"5. realtime speech"| GROK
+  SES -->|"events"| HUB
+  HUB -->|"live updates"| DASH
+  SES -->|"checks"| LOOK
+  SES -->|"SSN + bank"| VAULT
+  VAULT -->|"SSN only"| SYNC
+  SRV -->|"6. on transfer or end"| SYNC
+  SYNC -->|"7. fields, note, status"| CRM
+  SYNC -->|"8. redirect call"| TW
+  TW -->|"9. whisper + bridge"| A

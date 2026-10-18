@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live Call Map</title>
+<style>
+:root {
+  --bg: #0b1020; --panel: #131a2e; --panel2: #18213a; --line: #26324f; --text: #e6ebf5; --muted: #8b97b3;
+  --open: #4aa3ff; --qualify: #2dd4bf; --underwrite: #a78bfa; --present: #fbbf24; --close: #4ade80; --exit: #94a3b8;
+  --good: #22c55e; --bad: #ef4444; --lit: #fb923c;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { display: flex; align-items: center; gap: 16px; padding: 12px 20px; border-bottom: 1px solid var(--line); }
+header h1 { font-size: 17px; margin: 0; letter-spacing: .04em; text-transform: uppercase; }
+#live { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); }
+#live.on { background: var(--good); box-shadow: 0 0 8px var(--good); }
+#pick { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font: inherit; min-width: 260px; }
+#timer { margin-left: auto; font: 700 22px ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; }
+#banner { margin: 14px 20px 0; padding: 12px 20px; border-radius: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; font-size: 16px; background: var(--panel); border: 1px solid var(--line); color: var(--muted); min-height: 54px; display: flex; align-items: center; gap: 12px; }
+#banner.won { background: #14532d; border-color: var(--good); color: #bbf7d0; font-size: 30px; animation: bannerIn .5s ease-out; }
+#banner.lost { background: #7f1d1d; border-color: var(--bad); color: #fecaca; font-size: 30px; animation: bannerIn .5s ease-out; }
+#banner.neutral { background: #334155; border-color: #64748b; color: #e2e8f0; font-size: 30px; animation: bannerIn .5s ease-out; }
+main { display: grid; grid-template-columns: minmax(0, 1fr) clamp(380px, 24vw, 460px); gap: 16px; padding: 16px 20px 24px; align-items: start; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.card h2 { margin: 0 0 8px; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+#board svg { width: 100%; height: auto; display: block; }
+.band { fill: var(--c); fill-opacity: .06; stroke: var(--c); stroke-opacity: .25; }
+.lane-title { fill: var(--c); font: 700 14px system-ui, sans-serif; letter-spacing: .12em; text-transform: uppercase; text-anchor: middle; }
+.edge { fill: none; stroke: #4b5a78; stroke-width: 2; stroke-linejoin: round; }
+.edge.lit { stroke: var(--lit); stroke-width: 4; }
+.edge.temp { stroke-dasharray: 8 6; }
+.edge.loop:not(.lit) { stroke: #8a7a3a; }
+.chip-bg { fill: var(--bg); stroke: var(--line); }
+.chip-tx { fill: #b6c0d8; font: 600 12px system-ui, sans-serif; text-anchor: middle; }
+.node rect { fill: color-mix(in srgb, var(--c) 10%, #121a30); stroke: var(--c); stroke-width: 2; stroke-opacity: .55; }
+.node text { fill: var(--text); font: 700 15px system-ui, sans-serif; text-anchor: middle; pointer-events: none; }
+.node.visited rect { fill: color-mix(in srgb, var(--c) 28%, #121a30); stroke-opacity: 1; }
+.node:not(.visited):not(.current) { opacity: .6; }
+.node.current rect { stroke-width: 4; stroke-opacity: 1; fill: color-mix(in srgb, var(--c) 40%, #121a30); animation: glow 1.4s ease-in-out infinite; }
+.check circle { fill: var(--good); stroke: var(--bg); stroke-width: 2; }
+.check text { fill: #fff; font: 700 13px system-ui, sans-serif; text-anchor: middle; }
+#token circle { fill: var(--lit); stroke: #fff; stroke-width: 2.5; }
+#token text { font-size: 13px; text-anchor: middle; }
+.stage-name { font-size: 26px; font-weight: 800; }
+.tag { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; background: color-mix(in srgb, var(--c) 25%, transparent); color: var(--c); text-transform: uppercase; letter-spacing: .08em; }
+.goal { color: var(--muted); margin-top: 4px; }
+#progress { display: flex; gap: 6px; }
+#progress div { flex: 1; text-align: center; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+#progress i { display: block; height: 10px; border-radius: 5px; background: var(--line); margin-bottom: 4px; transition: background .4s; }
+#progress div.on i { background: var(--c); }
+#progress div.on { color: var(--text); }
+#hearts { font-size: 34px; letter-spacing: 6px; line-height: 1; }
+.heart { color: var(--bad); display: inline-block; text-shadow: 0 0 10px #ef444488; }
+.heart.broken { color: #3a4560; text-shadow: none; transform: scale(.85); animation: shake .4s; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.smoke { color: var(--muted); font-size: 13px; text-align: right; }
+.smoke b { color: var(--text); font-size: 18px; }
+#mood { display: flex; gap: 6px; align-items: center; }
+#mood span { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; text-transform: uppercase; background: var(--line); color: var(--muted); }
+#mood span.on.cold { background: #1e3a8a; color: #bfdbfe; }
+#mood span.on.neutral { background: #4b5563; color: #f3f4f6; }
+#mood span.on.warm { background: #9a3412; color: #fed7aa; }
+#score { font: 800 44px ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; line-height: 1; }
+#score.bump { animation: bump .4s; }
+#badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.badge { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px dashed var(--line); color: #4b5876; }
+.badge.earned { border: 1px solid #facc15; background: #422006; color: #fde68a; }
+.badge.pop { animation: pop .6s cubic-bezier(.2, 1.6, .4, 1); }
+.group { margin-bottom: 8px; }
+.group h3 { margin: 0 0 4px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
+.facts { display: flex; flex-wrap: wrap; gap: 5px; }
+.fact { padding: 3px 9px; border-radius: 8px; font-size: 12.5px; border: 1px solid var(--line); color: #55627f; background: transparent; }
+.fact.on { color: #d1fae5; background: #064e3b; border-color: #059669; }
+.fact.on b { color: #fff; font-weight: 700; }
+#transcript { max-height: 230px; overflow-y: auto; font-size: 14px; }
+#transcript p { margin: 0 0 6px; }
+.who { font-weight: 800; margin-right: 6px; }
+.who.bot { color: var(--open); }
+.who.prospect { color: var(--present); }
+.empty { color: var(--muted); }
+@keyframes glow { 50% { filter: drop-shadow(0 0 7px var(--c)); } }
+@keyframes pop { 0% { transform: scale(.2); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes bump { 40% { transform: scale(1.18); color: #fde68a; } }
+@keyframes shake { 25% { transform: translateX(-4px) rotate(-8deg); } 75% { transform: translateX(4px) rotate(8deg); } }
+@keyframes bannerIn { from { transform: translateY(-10px) scale(.98); } }
+@media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <span id="live" title="stream status"></span>
+  <h1>Live Call Map</h1>
+  <select id="pick" aria-label="Call"></select>
+  <div id="timer">00:00</div>
+</header>
+<div id="banner">Waiting for a call</div>
+<main>
+  <div class="col">
+    <div class="card" id="board"></div>
+    <div class="card"><h2>Live transcript</h2><div id="transcript"><p class="empty">No lines yet.</p></div></div>
+  </div>
+  <div class="col">
+    <div class="card" id="stage-card"><h2>Now</h2><div id="stage"></div></div>
+    <div class="card"><h2>Progress</h2><div id="progress"></div></div>
+    <div class="card">
+      <div class="row"><h2 style="margin:0">Patience</h2><div id="mood"></div></div>
+      <div class="row" style="margin-top:10px"><div id="hearts"></div><div class="smoke" id="smoke"></div></div>
+    </div>
+    <div class="card"><h2>Score</h2><div id="score">0</div><div id="badges"></div></div>
+    <div class="card"><h2>Prospect</h2><div id="prospect"></div></div>
+  </div>
+</main>
+<script>
+const NS = "http://www.w3.org/2000/svg";
+const BADGES = ["Disclosed", "Case Built", "Price Presented", "Objection Crusher", "App Started", "Closed"];
+const LANE_COLOR = { open: "var(--open)", qualify: "var(--qualify)", underwrite: "var(--underwrite)", present: "var(--present)", close: "var(--close)", exit: "var(--exit)" };
+const EDGE_LABELS = { "objection>objection": "again", "objection>lost": "4th miss", "price>commit": "accepts", "health>coverage": "adjust" };
+const MOODS = ["cold", "neutral", "warm"];
+const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+const $ = (id) => document.getElementById(id);
+const el = (tag, attrs = {}, parent) => {
+  const n = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  parent?.appendChild(n);
+  return n;
+};
+
+let FLOW, board;
+const calls = new Map();
+let currentId = null, follow = true, shown = { id: null, trailLen: 0, badges: [], score: 0, lives: null };
+
+/* ---------- board: layout and routing computed from /flow ---------- */
+function buildBoard(flow) {
+  const { LANES, STAGES, UNIVERSAL_EXITS } = flow;
+  const W = 122, H = 46, GAP = 100, PADX = 30, TOPY = 64, VGAP = 40, EXW = 112;
+  const laneIds = LANES.filter((l) => l.id !== "exit").map((l) => l.id);
+  const laneIdx = (id) => laneIds.indexOf(STAGES[id].lane);
+  const pos = {}, row = {};
+  const maxRows = Math.max(...laneIds.map((l) => Object.values(STAGES).filter((s) => s.lane === l).length));
+  laneIds.forEach((lane, li) => {
+    Object.keys(STAGES).filter((id) => STAGES[id].lane === lane).forEach((id, r) => {
+      const x = PADX + li * (W + GAP), y = TOPY + r * (H + VGAP);
+      pos[id] = { x, y, w: W, h: H, cx: x + W / 2, cy: y + H / 2 };
+      row[id] = r;
+    });
+  });
+  const totalW = PADX * 2 + laneIds.length * W + (laneIds.length - 1) * GAP;
+  const rowsBottom = TOPY + maxRows * H + (maxRows - 1) * VGAP;
+  const exitTop = rowsBottom + 140;
+  const exits = Object.keys(STAGES).filter((id) => STAGES[id].lane === "exit");
+  exits.forEach((id, i) => {
+    const x = PADX + (i * (totalW - 2 * PADX - EXW)) / (exits.length - 1);
+    pos[id] = { x, y: exitTop, w: EXW, h: H, cx: x + EXW / 2, cy: exitTop + H / 2 };
+  });
+  const height = exitTop + H + 24;
+
+  const svg = el("svg", { viewBox: `0 0 ${totalW} ${height}`, role: "img", "aria-label": "Call flow map" });
+  const defs = el("defs", {}, svg);
+  for (const [id, color] of [["arr", "#4b5a78"], ["arr-lit", "#fb923c"]]) {
+    const m = el("marker", { id, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: "auto-start-reverse" }, defs);
+    el("path", { d: "M0 0 L10 5 L0 10 z", fill: color }, m);
+  }
+  const gBands = el("g", {}, svg), gEdges = el("g", {}, svg), gLit = el("g", {}, svg), gChips = el("g", {}, svg);
+  const gNodes = el("g", {}, svg), gToken = el("g", {}, svg);
+
+  laneIds.forEach((lane, li) => {
+    const x = PADX + li * (W + GAP);
+    const c = LANE_COLOR[lane];
+    el("rect", { x: x - 14, y: 16, width: W + 28, height: rowsBottom - 4, rx: 14, class: "band", style: `--c:${c}` }, gBands);
+    const t = el("text", { x: x + W / 2, y: 44, class: "lane-title", style: `--c:${c}` }, gBands);
+    t.textContent = LANES.find((l) => l.id === lane).label;
+  });
+  el("rect", { x: PADX - 14, y: exitTop - 38, width: totalW - 2 * PADX + 28, height: H + 60, rx: 14, class: "band", style: "--c:var(--exit)" }, gBands);
+  el("text", { x: totalW / 2, y: exitTop - 16, class: "lane-title", style: "--c:var(--exit)" }, gBands).textContent = "Exits";
+
+  // Edges
+  const slots = {};
+  const slotX = (g, k) => PADX + g * (W + GAP) + W + 34 + k * 8;
+  const nextSlot = (g) => slotX(g, (slots[g] = (slots[g] ?? -1) + 1));
+  const inEdges = {};
+  const edgeList = [];
+  for (const [from, s] of Object.entries(STAGES)) for (const to of s.next ?? []) edgeList.push([from, to]);
+  for (const [, to] of edgeList) if (STAGES[to].lane === "exit") inEdges[to] = (inEdges[to] ?? 0) + 1;
+  const inSeen = {};
+  let channel = 0;
+  const hasReverse = (a, b) => a !== b && (STAGES[b].next ?? []).includes(a);
+
+  function route(a, b, temp) {
+    const A = pos[a], B = pos[b];
+    if (a === b) return [[A.x + W, A.cy - 13], [A.x + W + 26, A.cy - 13], [A.x + W + 26, A.cy + 13], [A.x + W, A.cy + 13]];
+    if (STAGES[b].lane === "exit") {
+      const g = laneIdx(a);
+      const gx = temp ? slotX(g, 8) : nextSlot(g);
+      const chY = exitTop - 22 - 9 * (temp ? 8 : channel++);
+      const n = inEdges[b] ?? 1, k = temp ? 0 : (inSeen[b] = (inSeen[b] ?? -1) + 1);
+      const bx = B.cx + (temp ? 0 : (k - (n - 1) / 2) * 16);
+      return [[A.x + W, A.cy], [gx, A.cy], [gx, chY], [bx, chY], [bx, B.y]];
+    }
+    const rev = hasReverse(a, b);
+    if (STAGES[a].lane === STAGES[b].lane) {
+      const d = row[b] - row[a];
+      if (Math.abs(d) === 1) {
+        const x = A.cx + (rev ? (d > 0 ? -10 : 10) : 0);
+        return d > 0 ? [[x, A.y + H], [x, B.y]] : [[x, A.y], [x, B.y + H]];
+      }
+      const gx = nextSlot(laneIdx(a));
+      return [[A.x + W, A.cy], [gx, A.cy], [gx, B.cy], [B.x + W, B.cy]];
+    }
+    const dyA = rev ? -9 : 0, dyB = rev ? 9 : 0;
+    const forward = laneIdx(b) > laneIdx(a);
+    const gx = nextSlot(forward ? laneIdx(b) - 1 : laneIdx(a) - 1);
+    const p0 = forward ? [A.x + W, A.cy + dyA] : [A.x, A.cy + dyA];
+    const p1 = forward ? [B.x, B.cy + dyB] : [B.x + W, B.cy + dyB];
+    return p0[1] === p1[1] ? [p0, p1] : [p0, [gx, p0[1]], [gx, p1[1]], p1];
+  }
+
+  const edges = {};
+  function drawEdge(from, to, temp) {
+    const id = `${from}>${to}`;
+    const pts = route(from, to, temp);
+    const poly = el("polyline", { points: pts.map((p) => p.join(",")).join(" "), class: `edge${from === to ? " loop" : ""}${temp ? " temp" : ""}`, "marker-end": "url(#arr)" }, gEdges);
+    edges[id] = { poly, pts, temp };
+    const label = EDGE_LABELS[id];
+    if (label) {
+      const [x, y] = midpoint(pts);
+      const text = (from === to ? "↻ " : "") + label;
+      const w = text.length * 7 + 14;
+      el("rect", { x: x - w / 2, y: y - 10, width: w, height: 20, rx: 6, class: "chip-bg" }, gChips);
+      el("text", { x, y: y + 4, class: "chip-tx" }, gChips).textContent = text;
+    }
+    return edges[id];
+  }
+  for (const [from, to] of edgeList) drawEdge(from, to, false);
+
+  // Nodes
+  const nodes = {};
+  for (const [id, s] of Object.entries(STAGES)) {
+    const p = pos[id];
+    const lost = id === "lost" || id === "dnc";
+    const g = el("g", { class: "node", style: `--c:${lost ? "var(--bad)" : LANE_COLOR[s.lane]}` }, gNodes);
+    el("title", {}, g).textContent = s.goal ? `${s.label}: ${s.goal}` : s.label;
+    el("rect", { x: p.x, y: p.y, width: p.w, height: p.h, rx: 10 }, g);
+    el("text", { x: p.cx, y: p.cy + 5 }, g).textContent = s.label;
+    nodes[id] = { g, checked: false };
+  }
+
+  const token = el("g", { id: "token", opacity: 0 }, gToken);
+  el("circle", { r: 12 }, token);
+  el("text", { y: 5 }, token).textContent = "☎";
+
+  return { svg, pos, nodes, edges, drawEdge, token, gLit, gNodes, W, H };
+}
+
+function midpoint(pts) {
+  const segs = pts.slice(1).map((p, i) => Math.hypot(p[0] - pts[i][0], p[1] - pts[i][1]));
+  let half = segs.reduce((a, b) => a + b, 0) / 2, i = 0;
+  while (i < segs.length - 1 && half > segs[i]) half -= segs[i++];
+  const f = segs[i] ? half / segs[i] : 0;
+  return [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * f, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * f];
+}
+
+function resetBoard() {
+  for (const [id, e] of Object.entries(board.edges)) {
+    if (e.temp) { e.poly.remove(); delete board.edges[id]; continue; }
+    e.poly.classList.remove("lit");
+    e.poly.setAttribute("marker-end", "url(#arr)");
+  }
+  for (const n of Object.values(board.nodes)) {
+    n.g.classList.remove("visited", "current");
+    n.g.querySelector(".check")?.remove();
+    n.checked = false;
+  }
+  board.token.setAttribute("opacity", 0);
+}
+
+function lightEdge(id) {
+  let e = board.edges[id];
+  if (!e) {
+    const [from, to] = id.split(">");
+    if (!board.pos[from] || !board.pos[to]) return null;
+    e = board.drawEdge(from, to, true);
+  }
+  e.poly.classList.add("lit");
+  e.poly.setAttribute("marker-end", "url(#arr-lit)");
+  board.gLit.appendChild(e.poly);
+  return e;
+}
+
+let animId = 0;
+function restPoint(stage) {
+  const p = board.pos[stage];
+  return [p.x + 6, p.y + 2];
+}
+function animateAlong(e, done) {
+  const my = ++animId;
+  const { pts } = e;
+  const segs = pts.slice(1).map((p, i) => Math.hypot(p[0] - pts[i][0], p[1] - pts[i][1]));
+  const total = segs.reduce((a, b) => a + b, 0);
+  const dur = Math.min(1400, 350 + total * 1.2);
+  const t0 = performance.now();
+  board.token.setAttribute("opacity", 1);
+  (function frame(now) {
+    if (my !== animId) return;
+    const p = Math.min(1, (now - t0) / dur);
+    let dist = p * total, i = 0;
+    while (i < segs.length - 1 && dist > segs[i]) dist -= segs[i++];
+    const f = segs[i] ? dist / segs[i] : 1;
+    board.token.setAttribute("transform", `translate(${pts[i][0] + (pts[i + 1][0] - pts[i][0]) * f},${pts[i][1] + (pts[i + 1][1] - pts[i][1]) * f})`);
+    if (p < 1) requestAnimationFrame(frame); else done();
+  })(t0);
+}
+
+function paintBoard(state, animate) {
+  if (shown.id !== state.callId) { resetBoard(); shown = { id: state.callId, trailLen: 0, badges: [], score: 0, lives: null }; animate = false; }
+  const visited = new Set(state.trail.map((t) => t.stage));
+  for (const [id, n] of Object.entries(board.nodes)) {
+    n.g.classList.toggle("visited", visited.has(id));
+    n.g.classList.toggle("current", id === state.stage);
+    if (visited.has(id) && !n.checked && id !== "dialing") {
+      const p = board.pos[id];
+      const c = el("g", { class: "check" }, n.g);
+      el("circle", { cx: p.x + p.w - 4, cy: p.y + 4, r: 11 }, c);
+      el("text", { x: p.x + p.w - 4, y: p.y + 9 }, c).textContent = "✓";
+      n.checked = true;
+    }
+  }
+  let last = null;
+  for (const id of new Set(state.traveled)) last = lightEdge(id) ?? last;
+  const lastId = state.traveled[state.traveled.length - 1];
+  const rest = restPoint(state.stage);
+  const place = () => { board.token.setAttribute("transform", `translate(${rest[0]},${rest[1]})`); board.token.setAttribute("opacity", 1); };
+  if (animate && !reduceMotion() && state.trail.length === shown.trailLen + 1 && board.edges[lastId]) {
+    animateAlong(board.edges[lastId], place);
+  } else { animId++; place(); }
+  shown.trailLen = state.trail.length;
+}
+
+/* ---------- HUD ---------- */
+function paintHud(state) {
+  const { STAGES, LANES, FACTS, OBJECTION_LIMIT } = FLOW;
+  const st = STAGES[state.stage];
+  const lane = st.lane;
+  $("stage").innerHTML = "";
+  const tag = Object.assign(document.createElement("span"), { className: "tag", textContent: LANES.find((l) => l.id === lane).label });
+  tag.style.setProperty("--c", LANE_COLOR[lane]);
+  const name = Object.assign(document.createElement("div"), { className: "stage-name", textContent: st.label });
+  const goal = Object.assign(document.createElement("div"), { className: "goal", textContent: st.goal ?? `Call ended: ${st.terminal.replace("_", " ")}` });
+  $("stage").append(tag, name, goal);
+
+  const laneOrder = LANES.filter((l) => l.id !== "exit");
+  const furthest = Math.max(-1, ...state.trail.map((t) => laneOrder.findIndex((l) => l.id === STAGES[t.stage].lane)));
+  $("progress").innerHTML = "";
+  laneOrder.forEach((l, i) => {
+    const d = document.createElement("div");
+    d.style.setProperty("--c", LANE_COLOR[l.id]);
+    d.className = i <= furthest ? "on" : "";
+    d.innerHTML = "<i></i>";
+    d.append(l.label);
+    $("progress").appendChild(d);
+  });
+
+  $("mood").innerHTML = MOODS.map((m) => `<span class="${m}${m === state.mood ? " on" : ""}">${m}</span>`).join("");
+
+  $("hearts").innerHTML = "";
+  for (let i = 0; i < OBJECTION_LIMIT; i++) {
+    const broken = i >= state.livesLeft;
+    const h = Object.assign(document.createElement("span"), { className: "heart" + (broken ? " broken" : ""), textContent: broken ? "♡" : "♥" });
+    if (!(broken && shown.lives === i + 1)) h.style.animation = "none";
+    $("hearts").appendChild(h);
+  }
+  shown.lives = state.livesLeft;
+  const smoke = state.objections.filter((o) => !o.afterPrice).length;
+  $("smoke").innerHTML = `<b>${smoke}</b> smoke screens<br>free before price`;
+
+  const scoreEl = $("score");
+  if (shown.score !== state.score) { scoreEl.classList.remove("bump"); void scoreEl.offsetWidth; scoreEl.classList.add("bump"); }
+  scoreEl.textContent = state.score;
+  shown.score = state.score;
+  $("badges").innerHTML = "";
+  for (const b of BADGES) {
+    const earned = state.badges.includes(b);
+    const chip = Object.assign(document.createElement("span"), { className: "badge" + (earned ? " earned" : ""), textContent: b });
+    if (earned && !shown.badges.includes(b)) chip.classList.add("pop");
+    $("badges").appendChild(chip);
+  }
+  shown.badges = [...state.badges];
+
+  const groups = {};
+  for (const [key, f] of Object.entries(FACTS)) (groups[f.group] ??= []).push([key, f]);
+  $("prospect").innerHTML = "";
+  for (const [g, items] of Object.entries(groups)) {
+    const box = Object.assign(document.createElement("div"), { className: "group" });
+    box.innerHTML = `<h3>${g}</h3>`;
+    const wrap = Object.assign(document.createElement("div"), { className: "facts" });
+    for (const [key, f] of items) {
+      const v = state.facts[key];
+      const chip = Object.assign(document.createElement("span"), { className: "fact" + (v != null ? " on" : "") });
+      chip.append(f.label);
+      if (v != null) { const b = document.createElement("b"); b.textContent = `: ${v}`; chip.appendChild(b); }
+      wrap.appendChild(chip);
+    }
+    box.appendChild(wrap);
+    $("prospect").appendChild(box);
+  }
+
+  const tr = $("transcript");
+  tr.innerHTML = "";
+  for (const line of state.transcript.slice(-8)) {
+    const p = document.createElement("p");
+    const who = Object.assign(document.createElement("span"), { className: `who ${line.speaker}`, textContent: line.speaker === "bot" ? "Sarah" : state.lead?.name ?? "Prospect" });
+    p.append(who, line.text);
+    tr.appendChild(p);
+  }
+  if (!state.transcript.length) tr.innerHTML = '<p class="empty">No lines yet.</p>';
+  tr.scrollTop = tr.scrollHeight;
+
+  const banner = $("banner");
+  if (state.outcome) {
+    const cls = state.outcome === "won" ? "won" : state.outcome === "lost" || state.outcome === "dnc" ? "lost" : "neutral";
+    const text = { won: "Won: handed off to agent", lost: "Lost: out of patience", dnc: "Do not call", hangup: "Prospect hung up", voicemail: "Voicemail", no_answer: "No answer", callback: "Callback requested", not_qualified: "Not qualified" }[state.outcome] ?? state.outcome;
+    const crm = state.crmStatus ? ` (CRM ${state.crmStatus})` : "";
+    if (banner.dataset.shown !== `${state.callId}:${state.outcome}`) { banner.className = cls; banner.dataset.shown = `${state.callId}:${state.outcome}`; }
+    banner.textContent = text + crm;
+  } else {
+    banner.className = "";
+    banner.dataset.shown = "";
+    banner.textContent = `Live: ${st.label}`;
+  }
+}
+
+function paintTimer() {
+  const s = calls.get(currentId);
+  if (!s) { $("timer").textContent = "00:00"; return; }
+  const secs = Math.max(0, Math.floor(((s.endedAt ?? Date.now()) - s.startedAt) / 1000));
+  $("timer").textContent = `${String(Math.floor(secs / 60)).padStart(2, "0")}:${String(secs % 60).padStart(2, "0")}`;
+}
+
+/* ---------- call picker and stream ---------- */
+const newestId = () => [...calls.values()].sort((a, b) => b.startedAt - a.startedAt)[0]?.callId ?? null;
+
+function paintPicker() {
+  const pick = $("pick");
+  const sorted = [...calls.values()].sort((a, b) => b.startedAt - a.startedAt);
+  pick.innerHTML = "";
+  for (const s of sorted) {
+    const o = document.createElement("option");
+    o.value = s.callId;
+    o.textContent = `${s.lead?.name ?? s.callId} · ${new Date(s.startedAt).toLocaleTimeString()} · ${s.outcome ?? s.stage}`;
+    pick.appendChild(o);
+  }
+  pick.value = currentId ?? "";
+}
+
+function show(id, animate) {
+  currentId = id;
+  paintPicker();
+  const s = calls.get(id);
+  if (!s) return;
+  paintBoard(s, animate);
+  paintHud(s);
+  paintTimer();
+}
+
+$("pick").addEventListener("change", (e) => {
+  follow = e.target.value === newestId();
+  show(e.target.value, false);
+});
+
+function connect() {
+  const es = new EventSource("/stream");
+  es.onopen = () => $("live").classList.add("on");
+  es.onerror = () => $("live").classList.remove("on");
+  es.onmessage = (m) => {
+    const data = JSON.parse(m.data);
+    if (data.snapshot) {
+      for (const s of data.snapshot) calls.set(s.callId, s);
+      if (follow || !calls.has(currentId)) show(newestId(), false);
+      else paintPicker();
+      return;
+    }
+    const isNew = !calls.has(data.callId);
+    calls.set(data.callId, data.state);
+    if (isNew && follow) show(data.callId, false);
+    else if (data.callId === currentId) { paintPicker(); paintBoard(data.state, true); paintHud(data.state); }
+    else paintPicker();
+  };
+}
+
+(async () => {
+  FLOW = await (await fetch("/flow")).json();
+  board = buildBoard(FLOW);
+  $("board").appendChild(board.svg);
+  setInterval(paintTimer, 500);
+  connect();
+})();
+</script>
+</body>
+</html>

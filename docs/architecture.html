@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Callback Bot: Architecture and Schema</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  :root { --bg:#0D1320; --card:#151E2E; --line:#26324A; --text:#E8EDF5; --muted:#A9B6CC; --accent:#F5A524; --blue:#7FB2F5; --green:#34D399; }
+  html, body { margin:0; background:var(--bg); color:var(--text); font-family:"DM Sans", Arial, sans-serif; }
+  main { max-width:1760px; margin:0 auto; padding:48px 32px 80px; }
+  h1 { font-size:44px; margin:0 0 6px; }
+  .lede { color:var(--muted); font-size:19px; margin:0 0 36px; max-width:1100px; line-height:1.5; }
+  h2 { font-size:28px; margin:56px 0 6px; color:#F4F6FA; }
+  h2 small { color:var(--accent); font-size:14px; letter-spacing:2px; text-transform:uppercase; display:block; margin-bottom:6px; }
+  .note { color:var(--muted); font-size:16px; margin:0 0 18px; max-width:1200px; line-height:1.5; }
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:24px; overflow-x:auto; }
+  .diagram { display:block; max-width:100%; height:auto; margin:0 auto; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+  table { width:100%; border-collapse:collapse; font-size:15px; }
+  th, td { text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--blue); font-weight:700; font-size:13px; letter-spacing:1px; text-transform:uppercase; }
+  code { font-family:"JetBrains Mono", Consolas, monospace; font-size:13.5px; color:#FDE68A; }
+  .tag { display:inline-block; font-size:12px; font-weight:700; padding:2px 8px; border-radius:999px; background:#1F2A3F; color:var(--muted); }
+  .won { background:#0F3B2A; color:var(--green); }
+  .bad { background:#3B1418; color:#F87171; }
+  @media (max-width:1100px) { .grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>AI Callback Bot: Architecture and Schema</h1>
+  <p class="lede">How a missed TV call becomes a callback, a complete final expense application and a live transfer to a licensed agent. Every box maps to a file in this repository. Default setup: one Node server on your PC, reached by Twilio through a Cloudflare tunnel. Diagram sources live in <code>docs/diagrams/*.mmd</code>; edit one and run <code>npm run diagrams</code> to redraw.</p>
+
+  <h2><small>1 · Components</small>What runs where</h2>
+  <p class="note">Solid arrows are calls the system makes; the tunnel only lets Twilio reach three paths (the call audio, the agent whisper and the voicemail check), each guarded by a Twilio signature and a per-process secret. Everything else, including the dashboard, is reachable only from your PC.</p>
+  <div class="panel"><img class="diagram" src="diagrams/components.svg" alt="Components: Twilio, tunnel, server, bot session, Grok Voice, hub, vault, CRM adapter, CRM, dialer"></div>
+
+  <h2><small>2 · One call</small>Callback to transfer, step by step</h2>
+  <p class="note">The happy path. Gates are enforced by the server, not the prompt: the bot cannot quote before the prospect confirms the needs recap, and cannot hand off until the application is complete. If the prospect declines the SSN or bank details, the same transfer runs with status 290 instead of 300.</p>
+  <div class="panel"><img class="diagram" src="diagrams/sequence.svg" alt="Step-by-step sequence of one callback from dialing to live transfer"></div>
+
+  <h2><small>3 · Data</small>Schema</h2>
+  <p class="note">A call is an append-only event log; its state is a pure fold over those events, so live calls, replays after a restart and simulations run the same code. Secrets never enter the event log: the vault holds them, and the state only holds masked values set by the server.</p>
+  <div class="panel"><img class="diagram" src="diagrams/schema.svg" alt="Entity relationship diagram of leads, calls, events, call state, facts, quotes, objections and the vault"></div>
+
+  <h2><small>4 · Rules</small>Gates, outcomes and where data lives</h2>
+  <div class="grid">
+    <div class="panel">
+      <table>
+        <tr><th>Gate (server-enforced)</th><th>Requires</th></tr>
+        <tr><td>Enter Coverage</td><td><code>marital_status</code>, <code>protecting</code>, <code>current_coverage</code>, <code>pain</code>, <code>aligned</code></td></tr>
+        <tr><td>Enter Health</td><td><code>face_amount</code></td></tr>
+        <tr><td>Run quote</td><td><code>case_confirmed</code> (prospect said yes to the recap)</td></tr>
+        <tr><td>Present price</td><td>a quote event</td></tr>
+        <tr><td>Handoff (300)</td><td><code>chosen_option</code>, <code>primary_beneficiary</code>, <code>address_verified</code>, <code>draft_date</code>, <code>ssn_on_file</code>, <code>bank_on_file</code></td></tr>
+        <tr><td>Lost (420)</td><td>automatic after 4 objections not overcome after price</td></tr>
+      </table>
+    </div>
+    <div class="panel">
+      <table>
+        <tr><th>Outcome</th><th>CRM write (status ids are the optional DSB adapter's; the CSV adapter records the outcome name)</th></tr>
+        <tr><td><span class="tag won">won</span></td><td>All fields + encrypted SSN + note, status <code>300</code>, live transfer</td></tr>
+        <tr><td><span class="tag won">transferred</span></td><td>Whatever was captured + note, status <code>290</code>, live transfer</td></tr>
+        <tr><td><span class="tag">callback</span></td><td>Note, status <code>50</code></td></tr>
+        <tr><td><span class="tag">hangup</span></td><td>Note; <code>110</code> if quoted, <code>80</code> if discovery reached</td></tr>
+        <tr><td><span class="tag bad">lost</span> / <span class="tag bad">not qualified</span></td><td>Note, status <code>420</code> / <code>440</code></td></tr>
+        <tr><td><span class="tag bad">dnc</span></td><td>Note, DNC flag, status <code>500</code></td></tr>
+        <tr><td><span class="tag">no answer / voicemail</span></td><td>Attempt note only; retried up to 3 times, 2h apart</td></tr>
+        <tr><td colspan="2" style="color:var(--muted)">In the DSB adapter, leads in its test-lead status get fields and notes but never a status change.</td></tr>
+      </table>
+    </div>
+    <div class="panel">
+      <table>
+        <tr><th>Data</th><th>Where</th><th>Kept</th></tr>
+        <tr><td>Call events + transcript (digits masked)</td><td><code>data/calls/*.jsonl</code></td><td>Until deleted</td></tr>
+        <tr><td>SSN, routing, account</td><td><code>data/vault/*.enc</code> (AES-256-GCM)</td><td>72 hours</td></tr>
+        <tr><td>SSN for the agent</td><td>Vault, plus the CRM's encrypted SSN field when a CRM adapter has one</td><td>72 hours (vault)</td></tr>
+        <tr><td>Bank details for the agent</td><td>Vault only, never the CRM or outcomes file</td><td>72 hours</td></tr>
+        <tr><td>Recordings</td><td>Twilio, paused during the secure section</td><td>Twilio settings</td></tr>
+        <tr><td>Leads and outcomes (default CRM)</td><td><code>data/leads.csv</code>, <code>data/outcomes.jsonl</code> (masked values only)</td><td>Until deleted</td></tr>
+        <tr><td>Dial attempts</td><td><code>data/dialer.json</code></td><td>Until deleted</td></tr>
+      </table>
+    </div>
+    <div class="panel">
+      <table>
+        <tr><th>Config (<code>.env</code>)</th><th>Used by</th></tr>
+        <tr><td><code>COMPANY_NAME</code>, <code>BOT_NAME</code>, <code>AGENT_NAME</code>, <code>CARRIER_NAME</code>, <code>CARRIER_BLURB</code>, <code>RATE_TABLE</code></td><td>Script, whisper and quote settings (<code>src/config.mjs</code>)</td></tr>
+        <tr><td><code>DIAL_ALLOWLIST</code>, <code>CONSENT_CONFIRMED</code></td><td>Demo-mode dial gate</td></tr>
+        <tr><td><code>HOST</code>, <code>DASHBOARD_TOKEN</code></td><td>Dashboard bind address and access token</td></tr>
+        <tr><td><code>CRM_PROVIDER</code></td><td><code>none</code> (CSV, default) or <code>dsb</code></td></tr>
+        <tr><td><code>DSB_CRM_MCP</code>, <code>DSB_BASE</code></td><td>Only with <code>CRM_PROVIDER=dsb</code>: the optional hosted-CRM adapter</td></tr>
+        <tr><td><code>X_API_KEY</code></td><td>Grok Voice 3.0 and grok-4.3</td></tr>
+        <tr><td><code>TWILIO_ACCOUNT_SID</code>, <code>TWILIO_AUTH_TOKEN</code>, <code>TWILIO_PHONE_NUMBER</code></td><td>Calls, recording, transfer</td></tr>
+        <tr><td><code>AGENT_TRANSFER_NUMBER</code></td><td>Where transfers ring</td></tr>
+        <tr><td><code>VAULT_KEY</code></td><td>Vault encryption (losing it makes the vault unreadable)</td></tr>
+        <tr><td><code>DIALER_*</code>, <code>MAX_CALL_MINUTES</code>, <code>PRACTICE_MAX_ACTIVE</code></td><td>Lines, attempts, window, caps</td></tr>
+      </table>
+    </div>
+  </div>
+</main>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "name": "grok-voice-sales-agent",
+  "version": "0.1.0",
+  "description": "Outbound final expense sales-call bot on Grok Voice 3.0 and Twilio, with a live Mission Control dashboard, server-enforced call gates and a pluggable CRM.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test test/",
+    "sim": "node scripts/simulate.mjs",
+    "diagrams": "node scripts/render-diagrams.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.22.0"
+  }
+}

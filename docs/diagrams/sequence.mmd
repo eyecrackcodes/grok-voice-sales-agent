@@ -1,0 +1,40 @@
+sequenceDiagram
+  autonumber
+  participant D as Dialer
+  participant T as Twilio
+  participant P as Prospect
+  participant B as Server + Bridge
+  participant G as Grok Voice 3.0
+  participant H as Hub + Dashboard
+  participant V as Vault
+  participant C as CRM adapter (CSV by default, or DSB)
+  participant A as Licensed agent
+  D->>C: listQueue (not DNC, allowlisted or consented, in calling window, under 3 attempts)
+  D->>T: create call (stream to tunnel, record, async AMD)
+  T->>P: ring
+  P-->>T: answers
+  T->>B: media stream start (secret, lead params)
+  B->>G: open session (script, 9 tools)
+  G->>P: "Returning your call about the coverage you saw on TV..."
+  loop every turn
+    P->>G: speech
+    G->>B: tool calls: set_stage, save_facts, log_objection
+    B->>H: events, gates checked, state pushed to dashboard
+  end
+  Note over B,G: Server gates<br/>discovery + alignment before coverage<br/>confirmed recap before quote
+  G->>B: get_quote
+  B-->>G: 3 options (age from DOB, rate table)
+  G->>B: verify_address
+  B-->>G: Census-standardized address to read back
+  G->>B: secure_mode on
+  B->>T: pause recording
+  G->>B: save_sensitive (SSN, routing, account, type)
+  B->>V: encrypt and store
+  B-->>G: last-4 read-backs + bank name
+  G->>B: secure_mode off
+  B->>T: resume recording
+  G->>B: set_stage handoff + transfer_to_agent
+  B->>C: writeHandoff (fields, masked note, status)
+  B->>T: redirect call: Dial agent
+  T->>A: ring, whisper summary
+  A-->>P: connected, agent reviews and submits

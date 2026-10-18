@@ -1,0 +1,100 @@
+erDiagram
+  LEAD ||--|{ CRM_POLICY : "has"
+  LEAD ||--o{ DIAL_ATTEMPT : "tried"
+  LEAD ||--o{ CALL : "called as"
+  CALL ||--|{ EVENT : "append-only log"
+  CALL ||--|| CALL_STATE : "folds into"
+  CALL ||--o| VAULT_RECORD : "secrets"
+  CALL_STATE }o--|| FLOW_STAGE : "validated by"
+  CALL_STATE ||--o| QUOTE : "priced by"
+  QUOTE ||--|{ QUOTE_OPTION : "offers"
+  CALL_STATE ||--o{ OBJECTION : "logs"
+  CALL_STATE ||--o{ FACT : "captures"
+  LEAD {
+    string lead_uid PK
+    string first_name
+    string last_name
+    int state "CRM state id"
+    string mobile
+    string timezone
+    bool dnc
+    string ssn "CRM-encrypted"
+  }
+  CRM_POLICY {
+    int id PK
+    int status "55 in, 300 290 110 80 50 420 440 500 out"
+    int carrier_id "CRM_CARRIER_ID"
+    int product_id "CRM_PRODUCT_ID"
+    number face_amount
+    number modal_premium
+    number annual_premium
+    string premium_draft_date "MM/DD/YYYY"
+    json primary_beneficiary "name, relationship, share"
+  }
+  DIAL_ATTEMPT {
+    string lead_uid FK
+    datetime at
+    string callSid "Twilio"
+    string callId FK
+    string result "no-answer voicemail won transferred..."
+    int seconds
+  }
+  CALL {
+    string callId PK
+    string callSid "Twilio"
+    string leadUid FK
+    string source "tv_callback"
+  }
+  EVENT {
+    string type "call_started stage fact quote objection transcript call_ended"
+    number at "epoch ms"
+    json payload "to, key/value, options, kind, speaker/text, reason"
+  }
+  CALL_STATE {
+    string stage
+    json trail "stage + time"
+    bool pricePresented
+    int livesLeft "4 minus objections not overcome after price"
+    int score
+    json badges
+    json transcript "last 50, digits masked"
+    string outcome "won transferred lost callback dnc hangup voicemail"
+    int crmStatus
+  }
+  FACT {
+    string key "first_name, pain, aligned, face_amount..."
+    string value "masked when sensitive"
+    bool serverOnly "address_verified, ssn_on_file, bank_on_file, tier, age"
+  }
+  FLOW_STAGE {
+    string id PK
+    string lane "open qualify underwrite present close exit"
+    string goal
+    json next "legal moves"
+    json requires "facts needed to enter"
+    string terminal
+    int crmStatus
+  }
+  QUOTE {
+    string tier "LEVEL"
+  }
+  QUOTE_OPTION {
+    string carrier
+    string product
+    int face
+    number monthly
+    number annual
+  }
+  OBJECTION {
+    string kind
+    bool afterPrice
+    string resolved "true, false, or open"
+  }
+  VAULT_RECORD {
+    string ssn "AES-256-GCM at rest"
+    string routing "ABA check digit + directory"
+    string bank
+    string account
+    string accountType "checking or savings"
+    number updatedAt "file deleted after 72h"
+  }

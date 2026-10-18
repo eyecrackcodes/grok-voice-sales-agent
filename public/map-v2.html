@@ -1,0 +1,2007 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mission Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- The web font stylesheet is injected by the script once the board is up, so a hanging font request can't block the page. -->
+<style>
+/* Dark is the default for the wallboard; light sits behind the toggle or ?theme=light. */
+:root, :root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #05070b; --glow1: rgba(96, 165, 250, .12); --glow2: rgba(251, 146, 60, .06); --grid: rgba(148, 163, 184, .035);
+  --panel: rgba(17, 22, 32, .78); --panel-hi: rgba(255, 255, 255, .045); --sheen: rgba(255, 255, 255, .035); --bar: rgba(5, 7, 11, .62);
+  --line: rgba(148, 163, 184, .13); --line2: rgba(148, 163, 184, .24);
+  --text: #e8edf5; --soft: #bcc5d4; --muted: #8b96aa; --dim: #5d6779;
+  --open: #60a5fa; --qualify: #2dd4bf; --underwrite: #a78bfa; --present: #fbbf24; --close: #4ade80; --exit: #94a3b8;
+  --good: #34d399; --bad: #f87171; --warn: #fbbf24; --lit: #fb923c; --gold: #facc15;
+  --bot: #7aa2ff; --pro: #f5b84a; --ink: #05110c;
+  --node: #0d121a; --edge: #2c3546; --edge-loop: #4d4430; --node-lbl: #8a95a8; --node-on: #eef2f8; --chip: #0a0e15;
+  --shadow: 0 8px 30px rgba(0, 0, 0, .28); --toast: #141b27;
+  --mk-needs: rgba(251, 191, 36, .2); --mk-other: rgba(96, 165, 250, .18);
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #eef1f6; --glow1: rgba(37, 99, 235, .07); --glow2: rgba(234, 88, 12, .05); --grid: rgba(15, 23, 42, .035);
+  --panel: rgba(255, 255, 255, .94); --panel-hi: rgba(15, 23, 42, .04); --sheen: rgba(255, 255, 255, .5); --bar: rgba(255, 255, 255, .8);
+  --line: rgba(15, 23, 42, .1); --line2: rgba(15, 23, 42, .19);
+  --text: #0f172a; --soft: #334155; --muted: #5b6678; --dim: #929eb2;
+  --open: #2563eb; --qualify: #0d9488; --underwrite: #7c3aed; --present: #d97706; --close: #16a34a; --exit: #64748b;
+  --good: #059669; --bad: #dc2626; --warn: #c27803; --lit: #ea580c; --gold: #ca8a04;
+  --bot: #2563eb; --pro: #b45309; --ink: #ffffff;
+  --node: #ffffff; --edge: #c3ccd9; --edge-loop: #d8c792; --node-lbl: #64748b; --node-on: #0f172a; --chip: #ffffff;
+  --shadow: 0 6px 20px rgba(15, 23, 42, .08); --toast: #ffffff;
+  --mk-needs: rgba(217, 119, 6, .2); --mk-other: rgba(37, 99, 235, .14);
+}
+:root {
+  --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --r: 14px; --gap: 12px;
+  /* Floors so captions and details stay readable from a few feet away at 1366x768. */
+  --cap: max(.66rem, 12px); --det: max(.84rem, 13px);
+}
+* { box-sizing: border-box; }
+html { font-size: clamp(13.5px, calc(0.42vw + 8.4px), 17px); }
+body {
+  margin: 0; height: 100vh; overflow: hidden; color: var(--text); font: 400 1rem/1.4 var(--sans);
+  background:
+    radial-gradient(1200px 520px at 50% -180px, var(--glow1), transparent 70%),
+    radial-gradient(800px 400px at 100% 110%, var(--glow2), transparent 70%),
+    linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 100% 32px,
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 32px 100%,
+    var(--bg);
+  display: grid; grid-template-rows: auto auto minmax(0, 1fr);
+  -webkit-font-smoothing: antialiased;
+}
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+button { font-family: inherit; }
+
+/* ---------- top bar ---------- */
+.top { position: relative; z-index: 5; display: flex; align-items: center; gap: 1.1rem; padding: .5rem 1rem; border-bottom: 1px solid var(--line); background: var(--bar); backdrop-filter: blur(14px); }
+.brand { display: flex; align-items: center; gap: .65rem; flex: none; }
+.brand svg { width: 1.85rem; height: 1.85rem; }
+.brand b { display: block; font-size: 1.05rem; letter-spacing: .01em; font-weight: 700; }
+.brand small { display: block; color: var(--muted); font-size: max(.76rem, 12px); }
+.sep { width: 1px; height: 1.9rem; background: var(--line2); flex: none; }
+.picker { display: flex; align-items: center; gap: .55rem; min-width: 0; }
+#live { width: .55rem; height: .55rem; border-radius: 50%; background: var(--bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 18%, transparent); flex: none; }
+#live.on { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 20%, transparent), 0 0 10px var(--good); }
+#pick { appearance: none; background: var(--panel-hi) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238590a5' fill='none' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right .7rem center; color: var(--text); border: 1px solid var(--line2); border-radius: 9px; padding: .42rem 2rem .42rem .7rem; font: 500 .9rem var(--sans); width: clamp(15rem, 22vw, 25rem); min-width: 0; }
+#pick option { background: var(--node); color: var(--text); }
+.btn { background: transparent; border: 1px solid var(--line2); color: var(--muted); border-radius: 9px; padding: .4rem .7rem; font: 600 max(.78rem, 12px) var(--sans); letter-spacing: .03em; cursor: pointer; white-space: nowrap; }
+.btn.on { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, transparent); background: color-mix(in srgb, var(--good) 8%, transparent); }
+.btn.icon { padding: .35rem .45rem; display: grid; place-items: center; }
+.btn.icon svg { width: 1.05rem; height: 1.05rem; }
+.hud { margin-left: auto; display: flex; align-items: center; gap: 1.6rem; position: relative; }
+.hud-i { display: flex; flex-direction: column; align-items: flex-end; gap: .1rem; position: relative; }
+.hud-i > b { font: 800 1.85rem/1 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.hud-i > small, .hud-cap { color: var(--muted); font-size: var(--cap); letter-spacing: .08em; text-transform: uppercase; font-weight: 600; white-space: nowrap; }
+.hearts { display: flex; gap: .25rem; }
+.hearts svg { width: 1.6rem; height: 1.6rem; display: block; }
+.hearts .h path { fill: #f43f5e; filter: drop-shadow(0 0 5px rgba(244, 63, 94, .5)); }
+.hearts .h.broken path, .hearts.idle .h path { fill: none; stroke: var(--dim); stroke-width: 2; filter: none; }
+.hearts .h.breaking { animation: shake .45s; }
+.delta { position: absolute; right: 100%; top: -.1rem; margin-right: .4rem; font: 700 1rem var(--mono); color: var(--good); opacity: 0; white-space: nowrap; pointer-events: none; }
+.delta.go { animation: rise 1.4s ease-out; }
+/* achievements: an icon strip in the HUD, so it never falls below the fold */
+.bdg { display: flex; gap: .3rem; }
+.bdg span { width: 1.7rem; height: 1.7rem; display: grid; place-items: center; position: relative; color: var(--dim); }
+.bdg span > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.bdg span > svg path { fill: none; stroke: var(--line2); stroke-width: 1.4; }
+.bdg span > i { position: relative; width: .95rem; height: .95rem; display: grid; }
+.bdg span > i svg { width: 100%; height: 100%; }
+.bdg span.earned { color: var(--ink); }
+.bdg span.earned > svg path { fill: var(--gold); stroke: var(--gold); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--gold) 55%, transparent)); }
+.bdg span.pop { animation: pop .6s cubic-bezier(.2, 1.6, .4, 1); }
+#badges-cap { max-width: 15rem; overflow: hidden; text-overflow: ellipsis; }
+#badges-cap b { color: var(--gold); font-weight: 700; text-transform: none; letter-spacing: .01em; }
+/* Toasts sit inside the header, over the badge strip, never over the status strip or the map. */
+#toasts { position: absolute; right: 0; top: 50%; transform: translateY(-50%); z-index: 30; pointer-events: none; }
+.toast { display: flex; align-items: center; gap: .7rem; padding: .4rem 1rem .4rem .45rem; border-radius: 12px; background: var(--toast); border: 1px solid var(--line2); box-shadow: 0 14px 34px rgba(0, 0, 0, .35); animation: toastIn .35s cubic-bezier(.2, 1.3, .4, 1), toastOut .35s ease-in 2.7s forwards; min-width: 15rem; white-space: nowrap; }
+.toast .ti { width: 2rem; height: 2rem; border-radius: 9px; display: grid; place-items: center; background: var(--tc); color: var(--ink); flex: none; }
+.toast .ti svg { width: 1.2rem; height: 1.2rem; }
+.toast small { display: block; font-size: var(--cap); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.toast b { font-size: .98rem; font-weight: 700; }
+
+/* ---------- status strip: live stage, then the outcome banner ---------- */
+#status { margin: var(--gap) 1rem 0; border-radius: var(--r); border: 1px solid var(--line); background: linear-gradient(90deg, var(--panel-hi), transparent), var(--panel); padding: .6rem 1.1rem; display: flex; align-items: center; gap: 1.4rem; min-height: 4.4rem; position: relative; overflow: hidden; box-shadow: var(--shadow); }
+#status::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--c, var(--line2)); }
+.now { min-width: 10.5rem; }
+.now-k { font-size: var(--cap); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); display: flex; gap: .5rem; align-items: center; font-weight: 600; }
+.lane-tag { color: var(--c); font-weight: 800; }
+.now-name { font-size: 1.95rem; font-weight: 800; letter-spacing: -.02em; line-height: 1.05; white-space: nowrap; }
+.now-goal { color: var(--soft); font-size: 1.02rem; flex: 1; min-width: 0; }
+.now-goal small, .st-stat small { display: block; color: var(--muted); font-size: var(--cap); letter-spacing: .1em; text-transform: uppercase; margin-bottom: .15rem; font-weight: 600; }
+.now-goal .goal { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The prospect's why, pinned to the strip for the whole call. */
+.why-line { margin-top: .2rem; display: flex; align-items: baseline; gap: .5rem; min-width: 0; font-size: 1rem; }
+.why-line .wk { flex: none; font-size: var(--cap); letter-spacing: .1em; text-transform: uppercase; font-weight: 800; color: var(--pro); }
+.why-line q { quotes: "“" "”"; color: var(--text); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.why-line .nt { color: var(--soft); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.why-line .vb { flex: none; }
+.why-line.miss-why .wk, .why-line.miss-why .nt { color: var(--warn); font-style: normal; font-weight: 600; }
+.st-stat { text-align: right; white-space: nowrap; }
+.st-stat b { display: block; font: 700 1.4rem/1.1 var(--mono); font-variant-numeric: tabular-nums; }
+.st-stat b.stale { color: var(--warn); }
+.st-stat small { margin: .15rem 0 0; }
+.mood { display: inline-block; padding: .22rem .65rem; border-radius: 999px; font-size: max(.78rem, 12px); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; border: 1px solid var(--line2); color: var(--soft); white-space: nowrap; }
+.mood.warm { color: var(--lit); border-color: color-mix(in srgb, var(--lit) 50%, transparent); background: color-mix(in srgb, var(--lit) 11%, transparent); }
+.mood.cold { color: var(--open); border-color: color-mix(in srgb, var(--open) 50%, transparent); background: color-mix(in srgb, var(--open) 11%, transparent); }
+.mood.none { color: var(--dim); border-style: dashed; text-transform: none; letter-spacing: .02em; font-weight: 600; }
+.mood.maybe { border-style: dashed; }
+/* Lane colors carry the grouping; the board already names the lanes. */
+.seq { display: flex; gap: .45rem; align-items: center; flex: none; }
+.seq-ticks { display: flex; gap: 3px; }
+.seq-ticks i { width: 1rem; height: .5rem; border-radius: 3px; background: color-mix(in srgb, var(--exit) 20%, transparent); }
+.seq-ticks i.side { width: .55rem; }
+.seq-ticks i.on { background: var(--c); }
+.seq-ticks i.cur { background: var(--text); box-shadow: 0 0 10px var(--text); animation: blink 1.4s ease-in-out infinite; }
+#status.won { border-color: color-mix(in srgb, var(--good) 60%, transparent); background: linear-gradient(90deg, color-mix(in srgb, var(--good) 30%, transparent), color-mix(in srgb, var(--good) 8%, transparent)), var(--panel); box-shadow: 0 0 40px color-mix(in srgb, var(--good) 18%, transparent); }
+#status.lost { border-color: color-mix(in srgb, var(--bad) 60%, transparent); background: linear-gradient(90deg, color-mix(in srgb, var(--bad) 28%, transparent), color-mix(in srgb, var(--bad) 6%, transparent)), var(--panel); box-shadow: 0 0 40px color-mix(in srgb, var(--bad) 15%, transparent); }
+#status.neutral { border-color: color-mix(in srgb, var(--exit) 55%, transparent); background: linear-gradient(90deg, color-mix(in srgb, var(--exit) 24%, transparent), color-mix(in srgb, var(--exit) 5%, transparent)), var(--panel); }
+#status.enter { animation: bannerIn .5s ease-out; }
+#status.stale { border-color: color-mix(in srgb, var(--warn) 55%, transparent); border-style: dashed; }
+#status.stale .now-name { color: var(--soft); }
+.out-icon { width: 3rem; height: 3rem; border-radius: 50%; display: grid; place-items: center; flex: none; background: var(--c); color: var(--ink); }
+.out-icon svg { width: 1.6rem; height: 1.6rem; }
+.out-main { flex: 1; min-width: 0; }
+.out-title { font-size: 2rem; font-weight: 800; letter-spacing: -.02em; line-height: 1.05; white-space: nowrap; }
+.out-sub { color: var(--soft); margin-top: .2rem; font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stats { display: flex; gap: .45rem; flex: none; }
+.stat { min-width: 4.9rem; padding: .35rem .65rem; border-radius: 10px; background: color-mix(in srgb, var(--bg) 35%, transparent); border: 1px solid var(--line); text-align: center; }
+.stat b { display: block; font: 800 1.3rem/1.15 var(--mono); font-variant-numeric: tabular-nums; }
+.stat small { display: block; color: var(--muted); font-size: var(--cap); letter-spacing: .05em; text-transform: uppercase; font-weight: 700; white-space: nowrap; }
+
+/* ---------- grid ---------- */
+main { display: grid; grid-template-columns: clamp(270px, 21vw, 410px) minmax(0, 1fr) clamp(290px, 22.5vw, 440px); gap: var(--gap); padding: var(--gap) 1rem .8rem; min-height: 0; }
+.col { display: flex; flex-direction: column; gap: var(--gap); min-height: 0; min-width: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line2) transparent; padding-bottom: 2px; }
+.col.center { overflow: hidden; }
+.card { background: linear-gradient(180deg, var(--sheen), transparent 60%), var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: .75rem .95rem; box-shadow: inset 0 1px 0 var(--sheen), var(--shadow); backdrop-filter: blur(12px); flex: none; }
+.ch { display: flex; align-items: center; justify-content: space-between; gap: .6rem; margin: 0 0 .55rem; min-width: 0; }
+.ch h2 { margin: 0; font-size: max(.76rem, 12px); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.ch .meta { font-size: max(.74rem, 12px); color: var(--muted); letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.pill { font-size: var(--cap); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: .15rem .5rem; border-radius: 999px; border: 1px solid var(--line2); color: var(--muted); white-space: nowrap; }
+.empty { color: var(--muted); font-size: max(.9rem, 13px); }
+.pill:empty { display: none; }
+
+/* Fit levels: each side card has a compact form, and the column fitter raises levels while
+   everything still fits, so nothing sits below the fold on a wallboard. */
+.card[data-level="0"] :is(.lv1, .lv2, .lv3), .card[data-level="1"] :is(.lv2, .lv3), .card[data-level="2"] .lv3,
+.card[data-level="2"] .max1, .card[data-level="3"] .max1, .card:not([data-level="0"]) .only0 { display: none !important; }
+:is(#words-card, #ladder-card, #timeline-card)[data-level="0"] > .ch { margin-bottom: 0; }
+
+/* checklists, shared by next best action, prices locked and discipline */
+/* Label and value share a line when they fit; a long value drops to its own line instead of being cut. */
+.chk { display: flex; flex-wrap: wrap; column-gap: .5rem; align-items: center; padding: .2rem 0; font-size: max(.95rem, 13.5px); }
+.chk > span:nth-child(2) { min-width: 0; }
+.chk .box { flex: none; width: 1.1rem; height: 1.1rem; border-radius: 5px; border: 1.5px solid var(--dim); display: grid; place-items: center; font: 800 .7rem var(--sans); color: var(--ink); }
+.chk.ok .box { background: var(--good); border-color: var(--good); }
+.chk.ok .box::after { content: ""; width: .28rem; height: .55rem; border: solid var(--ink); border-width: 0 2px 2px 0; transform: translateY(-1px) rotate(45deg); }
+.chk.unk .box { background: var(--warn); border-color: var(--warn); }
+.chk.unk .box::after { content: "?"; }
+.chk.bad .box { background: var(--bad); border-color: var(--bad); }
+.chk.bad .box::after { content: "!"; }
+.chk.info .box { border-style: dashed; border-color: var(--muted); }
+.chk.metric .box { border-radius: 50%; border-color: var(--qualify); }
+.chk.metric .box::after { content: ""; width: .38rem; height: .38rem; border-radius: 50%; background: var(--qualify); }
+.chk.metric { color: var(--soft); }
+.chk.ok { color: var(--soft); }
+.chk.todo { color: var(--text); font-weight: 600; }
+.chk .v { flex: 1 1 auto; max-width: 100%; color: var(--muted); font-size: var(--det); text-align: right; font-weight: 400; overflow-wrap: anywhere; }
+.chk.unk .v { color: var(--warn); }
+.chk.todo .v { color: var(--dim); }
+.chk.bad .v { color: var(--bad); }
+
+/* next best action */
+#nba-card { border-color: color-mix(in srgb, var(--lit) 38%, transparent); background: linear-gradient(180deg, color-mix(in srgb, var(--lit) 10%, transparent), color-mix(in srgb, var(--lit) 2%, transparent)), var(--panel); }
+#nba-card .ch h2 { color: var(--lit); }
+.nba-alert { display: grid; grid-template-columns: 1.5rem minmax(0, 1fr); gap: .55rem; align-items: start; padding: .55rem .65rem; border-radius: 10px; margin-bottom: .6rem; background: color-mix(in srgb, var(--bad) 13%, transparent); border: 1px solid color-mix(in srgb, var(--bad) 55%, transparent); }
+.nba-alert .ic { width: 1.4rem; height: 1.4rem; border-radius: 50%; background: var(--bad); color: var(--ink); display: grid; place-items: center; font: 800 .85rem var(--sans); }
+.nba-alert b { display: block; font-size: 1.02rem; line-height: 1.25; }
+.nba-alert small { color: var(--soft); font-size: var(--det); }
+.nba-goal { font-size: 1.15rem; font-weight: 650; line-height: 1.32; }
+.nba-goal .soft { color: var(--soft); font-weight: 500; }
+.nba-ctx { margin-top: .35rem; font-size: max(.88rem, 13px); color: var(--soft); }
+.nba-gate { margin-top: .6rem; padding-top: .5rem; border-top: 1px solid var(--line); }
+.nba-gate-h { display: flex; justify-content: space-between; gap: .5rem; font-size: max(.8rem, 13px); color: var(--muted); margin-bottom: .2rem; }
+.nba-gate-h b { color: var(--text); font-weight: 700; }
+.path { margin-top: .6rem; display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .35rem; font-size: max(.8rem, 13px); color: var(--soft); }
+.path .k { font-size: var(--cap); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 700; margin-right: .1rem; }
+.path .ar { color: var(--dim); }
+.path .stop { display: inline-flex; align-items: center; gap: .25rem; padding: .08rem .45rem; border-radius: 7px; background: var(--panel-hi); border: 1px solid var(--line); white-space: nowrap; }
+.path .stop svg { width: .8rem; height: .8rem; }
+.path .stop.locked svg { color: var(--muted); }
+.path .stop.unlocked { border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
+.path .stop.unlocked svg { color: var(--gold); }
+.path .stop.weak { border-style: dashed; border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
+.path .stop.weak svg { color: var(--warn); }
+
+/* coach rules */
+.rule { display: grid; grid-template-columns: 1.35rem minmax(0, 1fr) auto; gap: .5rem; align-items: start; padding: .24rem .45rem; border-radius: 9px; font-size: max(.9rem, 13.5px); color: var(--muted); }
+.rule .ic { width: 1.15rem; height: 1.15rem; margin-top: .08rem; border-radius: 50%; display: grid; place-items: center; font: 800 max(.68rem, 12px) var(--sans); }
+.rule .tg { font-size: var(--cap); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 700; padding-top: .1rem; white-space: nowrap; }
+.rule b { display: block; font-weight: 650; color: var(--text); }
+.rule small { display: block; color: var(--soft); font-size: var(--det); }
+.rule.nc { color: var(--soft); }
+.rule.nc .ic { border: 1.5px dashed var(--warn); color: var(--warn); }
+.rule.nc .tg { color: var(--warn); }
+.rules-sum { display: flex; flex-wrap: wrap; gap: .2rem .8rem; padding: .3rem .45rem 0; font-size: max(.84rem, 13px); color: var(--muted); }
+.rules-sum b { color: var(--good); font-weight: 700; }
+.rule.flag, .rule.alert { margin: .1rem 0 .3rem; padding: .45rem .5rem; }
+.rule.flag { background: color-mix(in srgb, var(--warn) 10%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 38%, transparent); }
+.rule.flag .ic { background: var(--warn); color: var(--ink); }
+.rule.alert { background: color-mix(in srgb, var(--bad) 11%, transparent); border: 1px solid color-mix(in srgb, var(--bad) 45%, transparent); }
+.rule.alert .ic { background: var(--bad); color: var(--ink); }
+.rule.pass .ic { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
+.rule.wait, .rule.na { color: var(--dim); }
+.rule.wait .ic { border: 1.5px dashed var(--dim); }
+.rule.na .ic { border: 1.5px solid var(--line2); }
+.rule.na .ic::after { content: ""; width: .45rem; height: 1.5px; background: var(--dim); }
+
+/* board */
+.board-card { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; padding: .55rem .7rem .35rem; }
+.board-card .ch { margin-bottom: .2rem; padding: 0 .25rem; }
+#board { min-height: 0; flex: 1 1 auto; display: flex; justify-content: center; }
+#board svg { width: 100%; height: auto; max-height: calc(100vh - 21rem); display: block; }
+.legend-row { display: flex; gap: .9rem; font-size: max(.74rem, 12px); color: var(--muted); white-space: nowrap; overflow: hidden; }
+.legend-row span { display: inline-flex; align-items: center; gap: .35rem; }
+.legend-row i { display: inline-block; width: 1rem; height: 3px; border-radius: 2px; background: var(--lit); }
+.legend-row i.base { background: var(--edge); }
+.legend-row i.dot { width: .65rem; height: .65rem; border-radius: 50%; background: var(--good); }
+.legend-row i.lk { width: .65rem; height: .65rem; border-radius: 50%; background: transparent; border: 2px solid var(--gold); }
+.band { fill: var(--c); fill-opacity: .04; stroke: var(--c); stroke-opacity: .18; stroke-dasharray: 3 5; }
+/* SVG sizes are in board units; the board renders at about 0.71x at 1366, so 17 units is about 12px. */
+.lane-title { fill: var(--c); font: 800 17px var(--sans); letter-spacing: .14em; text-transform: uppercase; text-anchor: middle; }
+.lane-title.halo { paint-order: stroke; stroke: var(--node); stroke-width: 6px; stroke-linejoin: round; }
+.edge { fill: none; stroke: var(--edge); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+.edge.lit { stroke: var(--lit); stroke-width: 3.4; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--lit) 70%, transparent)); }
+.edge.temp { stroke-dasharray: 6 6; }
+.edge.loop:not(.lit) { stroke: var(--edge-loop); }
+.chip-bg { fill: var(--chip); stroke: var(--edge); }
+.chip-tx { fill: var(--muted); font: 600 17px var(--sans); text-anchor: middle; letter-spacing: .01em; }
+.chip-end .chip-bg { fill: color-mix(in srgb, var(--bad) 22%, var(--chip)); stroke: var(--bad); }
+.chip-end .chip-tx { fill: var(--text); font-weight: 700; }
+.node .bg { fill: var(--node); stroke: color-mix(in srgb, var(--c) 34%, var(--edge)); stroke-width: 1.5; }
+.node .lbl { fill: var(--node-lbl); font: 700 20px var(--sans); text-anchor: middle; pointer-events: none; }
+.node .tm { fill: var(--muted); font: 700 17px var(--mono); text-anchor: middle; pointer-events: none; }
+.node.exit .lbl { font-size: 17px; }
+.node.visited .bg { fill: color-mix(in srgb, var(--c) 15%, var(--node)); stroke: color-mix(in srgb, var(--c) 70%, transparent); }
+.node.visited .lbl { fill: var(--node-on); }
+.node.current .bg, .node.final .bg { fill: color-mix(in srgb, var(--c) 32%, var(--node)); stroke: var(--c); stroke-width: 3; }
+.node.current .lbl, .node.final .lbl { fill: var(--node-on); font-weight: 800; }
+.node.current .tm { fill: var(--node-on); }
+.node .halo { fill: none; stroke: var(--c); stroke-width: 2; opacity: 0; }
+.node.current .halo { opacity: .5; animation: halo 1.8s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+.node.final .bg { filter: drop-shadow(0 0 8px color-mix(in srgb, var(--c) 70%, transparent)); }
+.mk-check circle { fill: var(--good); stroke: var(--bg); stroke-width: 2; }
+.mk-check path, .mk-x path { fill: none; stroke: var(--ink); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.mk-x circle { fill: var(--bad); stroke: var(--bg); stroke-width: 2; }
+.mk-end circle { fill: var(--exit); stroke: var(--bg); stroke-width: 2; }
+.mk-end rect { fill: var(--ink); }
+.mk-lock circle { fill: var(--chip); stroke: var(--line2); stroke-width: 1.6; }
+.mk-lock path { fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.mk-lock.open circle { fill: color-mix(in srgb, var(--gold) 20%, var(--chip)); stroke: var(--gold); }
+.mk-lock.open path { stroke: var(--gold); }
+.mk-lock.weak circle { fill: color-mix(in srgb, var(--warn) 16%, var(--chip)); stroke: var(--warn); stroke-dasharray: 3 2; }
+.mk-lock.weak path { stroke: var(--warn); }
+#token .core { fill: var(--lit); stroke: #fff; stroke-width: 2.4; }
+#token .ring { fill: none; stroke: var(--lit); stroke-width: 2; animation: ping 1.6s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+#token .ph { fill: #fff; }
+
+/* transcript */
+.transcript-card { flex: 1 1 0; min-height: 11rem; display: flex; flex-direction: column; }
+.talk { display: flex; align-items: center; gap: .55rem; font-size: max(.8rem, 12.5px); min-width: 0; }
+.talk .few { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.talk b { font: 700 .9rem var(--mono); }
+.talk .bt { color: var(--bot); white-space: nowrap; }
+.talk .pr { color: var(--pro); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ratio { position: relative; display: flex; width: clamp(6rem, 12vw, 13rem); height: .55rem; border-radius: 99px; overflow: visible; background: color-mix(in srgb, var(--exit) 18%, transparent); flex: none; }
+.ratio .a { background: var(--bot); border-radius: 99px 0 0 99px; }
+.ratio .b { background: var(--pro); border-radius: 0 99px 99px 0; }
+.ratio-mark { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--text); opacity: .7; }
+.ratio-mark::after { content: attr(data-l); position: absolute; bottom: calc(100% + 1px); left: 50%; transform: translateX(-50%); font: 700 max(.58rem, 11px)/1 var(--mono); color: var(--muted); }
+#transcript { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line2) transparent; padding-right: .3rem; }
+.ln { display: grid; grid-template-columns: 7.4rem minmax(0, 1fr); gap: .7rem; padding: .32rem .3rem; border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent); }
+.ln .who { display: flex; gap: .45rem; align-items: flex-start; min-width: 0; padding-top: .12rem; }
+.ln .av { width: 1.5rem; height: 1.5rem; border-radius: 50%; display: grid; place-items: center; font: 800 max(.74rem, 12px) var(--sans); flex: none; color: var(--ink); }
+.ln.bot .av { background: var(--bot); }
+.ln.prospect .av { background: var(--pro); }
+.ln .wt { min-width: 0; line-height: 1.15; }
+.ln .wt b { display: block; font-size: max(.8rem, 12.5px); letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ln.bot .wt b { color: var(--bot); }
+.ln.prospect .wt b { color: var(--pro); }
+.ln .wt time { font: 500 max(.72rem, 12px) var(--mono); color: var(--muted); }
+.ln p { margin: 0; font-size: 1.1rem; line-height: 1.42; }
+.ln.bot p { color: var(--soft); }
+.ln.prospect p { color: var(--text); font-weight: 500; }
+.ln.last { background: var(--panel-hi); border-radius: 8px; }
+.ln mark { background: var(--mk-other); color: inherit; border-radius: 4px; padding: 0 .12em; box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--open) 70%, transparent); }
+.ln mark.needs { background: var(--mk-needs); box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--warn) 80%, transparent); }
+.ftag { display: inline-block; margin-left: .4rem; vertical-align: .12em; font: 700 max(.6rem, 12px) var(--sans); letter-spacing: .05em; text-transform: uppercase; padding: .1rem .38rem; border-radius: 5px; color: var(--open); border: 1px solid color-mix(in srgb, var(--open) 45%, transparent); }
+.ftag.needs { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, transparent); }
+
+/* in their words */
+.quote { font-size: 1.15rem; line-height: 1.38; font-weight: 600; color: var(--text); padding: .1rem 0 .1rem .85rem; border-left: 3px solid var(--pro); }
+.quote.note { border-left: 3px dashed var(--muted); font-weight: 500; color: var(--soft); }
+.src { margin: .35rem 0 0 .85rem; font-size: var(--cap); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 700; display: flex; gap: .45rem; flex-wrap: wrap; align-items: center; }
+.vb { display: inline-flex; align-items: center; gap: .25rem; padding: .05rem .4rem; border-radius: 6px; letter-spacing: .02em; text-transform: none; font-size: max(.74rem, 12px); font-weight: 600; white-space: nowrap; }
+.vb.said { color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent); }
+.vb.note { color: var(--muted); border: 1px dashed var(--line2); }
+.vb.unk { color: var(--warn); border: 1px dashed color-mix(in srgb, var(--warn) 50%, transparent); }
+.why { margin-top: .65rem; display: grid; gap: .5rem; }
+.why .wl { font-size: var(--cap); letter-spacing: .1em; text-transform: uppercase; font-weight: 700; color: var(--muted); }
+.why .wv { font-size: .95rem; color: var(--text); padding-left: .6rem; border-left: 2px solid var(--pro); }
+.why .wv.note { border-left-style: dashed; border-left-color: var(--muted); color: var(--soft); }
+.why .src { margin-left: .6rem; margin-top: .2rem; }
+.miss { margin-top: .6rem; padding: .35rem .6rem; border-radius: 8px; font-size: var(--det); font-weight: 600; color: var(--warn); border: 1px dashed color-mix(in srgb, var(--warn) 50%, transparent); }
+
+/* case strength */
+.case-top { display: flex; align-items: center; gap: .8rem; }
+.case-n { font: 800 2.5rem/1 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.03em; }
+.case-n small { font-size: 1.1rem; color: var(--muted); font-weight: 700; }
+.tier { font-size: .95rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; padding: .28rem .7rem; border-radius: 9px; color: var(--tc); border: 1.5px solid color-mix(in srgb, var(--tc) 60%, transparent); background: color-mix(in srgb, var(--tc) 13%, transparent); }
+.case-top .confirm { margin-left: auto; text-align: right; font-size: max(.76rem, 12px); color: var(--muted); line-height: 1.25; }
+.case-top .confirm b { display: block; font-size: .9rem; color: var(--text); }
+.case-top .confirm b.ok { color: var(--good); }
+.meter { display: grid; gap: 4px; margin-top: .6rem; }
+.meter i { height: .75rem; border-radius: 3px; background: color-mix(in srgb, var(--exit) 18%, transparent); }
+/* A captured fact is always green; only the tier word carries the weak/strong color. */
+.meter i.ok { background: var(--good); box-shadow: 0 0 8px color-mix(in srgb, var(--good) 40%, transparent); }
+.meter i.unk { background: repeating-linear-gradient(135deg, var(--warn) 0 3px, transparent 3px 6px); outline: 1px solid color-mix(in srgb, var(--warn) 60%, transparent); outline-offset: -1px; }
+.gaps { margin-top: .5rem; display: grid; gap: .2rem; font-size: var(--det); color: var(--soft); }
+.gaps b { color: var(--text); font-weight: 650; }
+.gaps .u b { color: var(--warn); }
+.legend { margin-top: .35rem; font-size: max(.7rem, 12px); color: var(--muted); }
+.disc { margin-top: .6rem; padding-top: .5rem; border-top: 1px solid var(--line); }
+.card[data-level="0"] .disc, .card[data-level="1"] .disc { margin-top: .5rem; }
+.disc-h { font-size: var(--cap); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 700; margin-bottom: .2rem; }
+.chk.wide { display: grid; grid-template-columns: 1.2rem minmax(0, 1fr); column-gap: .5rem; row-gap: .05rem; align-items: start; }
+.chk.wide .box { margin-top: .12rem; }
+.chk.wide .v { grid-column: 2; text-align: left; white-space: normal; font-size: var(--det); line-height: 1.3; overflow-wrap: anywhere; }
+.share { display: inline-block; width: 3.4rem; height: .4rem; border-radius: 99px; background: color-mix(in srgb, var(--exit) 18%, transparent); margin-right: .45rem; vertical-align: middle; overflow: hidden; }
+.share i { display: block; height: 100%; background: var(--qualify); }
+
+/* ladder */
+.lad-h { font-size: max(.82rem, 12.5px); color: var(--muted); margin-bottom: .45rem; display: flex; justify-content: space-between; gap: .6rem; }
+.lad-h b { color: var(--soft); font-weight: 650; min-width: 0; }
+.lad-h span { flex: none; white-space: nowrap; }
+.rung { display: grid; grid-template-columns: 5.4rem minmax(0, 1fr) 6rem; gap: .6rem; align-items: center; padding: .38rem .5rem; border-radius: 9px; border: 1px solid transparent; margin-bottom: .2rem; }
+.rung .face { font: 700 1rem var(--mono); white-space: nowrap; }
+.rung .bar { height: .45rem; border-radius: 99px; background: color-mix(in srgb, var(--exit) 15%, transparent); overflow: hidden; }
+.rung .bar i { display: block; height: 100%; background: color-mix(in srgb, var(--exit) 70%, transparent); border-radius: 99px; }
+.rung .m { text-align: right; font: 700 1.05rem var(--mono); white-space: nowrap; }
+.rung .m small { font: 500 max(.7rem, 12px) var(--sans); color: var(--muted); }
+.rung.chosen { border-color: color-mix(in srgb, var(--good) 55%, transparent); background: color-mix(in srgb, var(--good) 9%, transparent); }
+.rung.chosen .bar i { background: var(--good); }
+.rung.chosen .face::after { content: "CHOSEN"; display: block; font: 800 max(.58rem, 11px) var(--sans); letter-spacing: .1em; color: var(--good); }
+.locked { display: grid; grid-template-columns: 2.3rem minmax(0, 1fr); gap: .7rem; padding: .6rem; border-radius: 11px; border: 1.5px dashed var(--line2); }
+.locked .lk { width: 2.3rem; height: 2.3rem; border-radius: 10px; display: grid; place-items: center; background: var(--panel-hi); color: var(--muted); }
+.locked .lk.open { color: var(--gold); background: color-mix(in srgb, var(--gold) 14%, transparent); }
+.locked .lk svg { width: 1.2rem; height: 1.2rem; }
+.locked > div > b { display: block; font-size: 1rem; }
+.locked > div > span { display: block; font-size: var(--det); color: var(--muted); margin-bottom: .3rem; }
+
+/* timeline */
+.tl { --tlw: 7rem; position: relative; margin-top: .3rem; padding-top: 1.1rem; }
+.tl-over { position: absolute; top: 0; bottom: 0; right: 0; left: calc(var(--tlw) + .5rem); pointer-events: none; }
+.tl-row { display: grid; grid-template-columns: var(--tlw) minmax(0, 1fr); align-items: center; gap: .5rem; margin-bottom: .45rem; }
+.tl-row > span { font-size: var(--cap); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); font-weight: 700; white-space: nowrap; }
+.track { position: relative; height: .8rem; border-radius: 4px; background: color-mix(in srgb, var(--exit) 10%, transparent); display: flex; overflow: visible; }
+.track .seg { height: 100%; background: var(--c); opacity: .75; border-right: 1px solid var(--bg); }
+.track .seg:first-child { border-radius: 4px 0 0 4px; }
+.track .seg.cur { opacity: 1; box-shadow: 0 0 8px var(--c); }
+.track.obj { background: transparent; border-top: 1px dashed var(--line2); height: 1rem; margin-top: .35rem; }
+.om { position: absolute; top: -.55rem; width: 1rem; height: 1rem; margin-left: -.5rem; border-radius: 50%; border: 2px solid var(--k); background: var(--bg); }
+.om.post { background: var(--k); }
+.price-line { position: absolute; top: .05rem; bottom: 0; width: 0; border-left: 2px dashed var(--present); }
+.price-line span { position: absolute; top: -.2rem; left: .3rem; font-size: var(--cap); font-weight: 800; color: var(--present); letter-spacing: .06em; white-space: nowrap; }
+.price-line.flip span { left: auto; right: .35rem; }
+.tl-legend { font-size: max(.7rem, 12px); color: var(--muted); display: flex; gap: .8rem; margin: -.1rem 0 .3rem; }
+.tl-legend i { display: inline-block; width: .6rem; height: .6rem; border-radius: 50%; border: 2px solid var(--muted); margin-right: .25rem; vertical-align: -.05rem; }
+.tl-legend i.f { background: var(--muted); }
+.ol { margin-top: .35rem; display: grid; gap: .2rem; }
+.card[data-level="1"] .ol { margin-top: 0; }
+.oi { display: grid; grid-template-columns: .75rem minmax(0, 1fr) auto auto; gap: .1rem .5rem; align-items: center; font-size: var(--det); }
+.oi i { width: .65rem; height: .65rem; border-radius: 50%; border: 2px solid var(--k); }
+.oi.post i { background: var(--k); }
+.oi .k { min-width: 0; overflow-wrap: anywhere; color: var(--soft); }
+.oi .s { font-size: var(--cap); font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--k); white-space: nowrap; }
+.oi .at { font: 500 max(.74rem, 12px) var(--mono); color: var(--muted); }
+.oi .pre { grid-column: 2 / -1; font-size: var(--cap); color: var(--muted); }
+.oi .pre em { font-style: normal; color: var(--soft); font-weight: 600; }
+
+/* prospect file */
+.fcount { display: flex; flex-wrap: wrap; gap: .3rem .35rem; }
+.fcount > span { font-size: max(.8rem, 12.5px); padding: .1rem .45rem; border-radius: 7px; border: 1px solid var(--line); color: var(--soft); white-space: nowrap; }
+.fcount > span > b { font-family: var(--mono); color: var(--muted); font-weight: 700; margin-left: .25rem; }
+.fcount > span.full > b { color: var(--good); }
+.fcount .ph { color: var(--warn); }
+.fneeds { margin-top: .45rem; }
+.fg { margin-bottom: .5rem; }
+.fg h3 { margin: 0 0 .28rem; font-size: var(--cap); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; font-weight: 700; }
+.fg h3 span { font-family: var(--mono); color: var(--dim); text-transform: none; letter-spacing: 0; }
+.fg h3 span.full { color: var(--good); }
+.fg h3 span .ph { color: var(--warn); }
+.fx { display: flex; flex-wrap: wrap; gap: .3rem; }
+.f { padding: .16rem .5rem; border-radius: 7px; font-size: max(.8rem, 12.5px); border: 1px solid var(--line); color: var(--dim); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.f.on { color: var(--soft); background: color-mix(in srgb, var(--good) 8%, transparent); border-color: color-mix(in srgb, var(--good) 32%, transparent); }
+.f.on b { color: var(--text); font-weight: 650; }
+.f.unk { color: var(--warn); border-style: dashed; border-color: color-mix(in srgb, var(--warn) 50%, transparent); }
+
+@keyframes blink { 50% { opacity: .45; } }
+@keyframes halo { from { transform: scale(1); opacity: .6; } to { transform: scale(1.16, 1.45); opacity: 0; } }
+@keyframes ping { from { transform: scale(.7); opacity: .9; } to { transform: scale(1.9); opacity: 0; } }
+@keyframes pop { 0% { transform: scale(.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes rise { 0% { opacity: 0; transform: translateY(6px); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-16px); } }
+@keyframes shake { 25% { transform: translateX(-3px) rotate(-10deg); } 75% { transform: translateX(3px) rotate(10deg); } }
+@keyframes bannerIn { from { transform: translateY(-6px); opacity: .4; } }
+@keyframes toastIn { from { opacity: 0; transform: translateY(-10px) scale(.96); } }
+@keyframes toastOut { to { opacity: 0; transform: translateY(-6px); } }
+
+/* Short or narrow wall screens: the transcript keeps its lines, the strip drops the lane rail. */
+@media (max-width: 1600px) { #status.end .seq { display: none; } .stat { min-width: 4.3rem; padding: .3rem .5rem; } }
+@media (max-width: 1500px) { .brand small { display: none; } .hud { gap: 1.1rem; } }
+@media (max-height: 820px) { .now-name { font-size: 1.75rem; } .out-title { font-size: 1.75rem; } #status { min-height: 4rem; padding: .5rem 1rem; } }
+@media (max-width: 1100px) {
+  body { height: auto; overflow: auto; }
+  main { grid-template-columns: 1fr; }
+  .col, .col.center { overflow: visible; }
+  .transcript-card { min-height: 22rem; }
+  #status, .top { flex-wrap: wrap; }
+  #board svg { max-height: none; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="bm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fb923c"/><stop offset="1" stop-color="#7aa2ff"/></linearGradient></defs><rect x="1" y="1" width="30" height="30" rx="8" fill="none" stroke="url(#bm)" stroke-width="2"/><path d="M8 21 L13 13 L18 18 L24 9" fill="none" stroke="url(#bm)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="24" cy="9" r="2.6" fill="#fb923c"/></svg>
+    <div><b>Mission Control</b><small>Sarah · outbound final expense</small></div>
+  </div>
+  <div class="sep"></div>
+  <div class="picker">
+    <span id="live" title="Stream status"></span>
+    <select id="pick" aria-label="Call"></select>
+    <button id="follow" class="btn on" type="button">Following newest</button>
+  </div>
+  <div class="hud">
+    <div class="hud-i" id="badges-i"><div class="bdg" id="badges" aria-label="Badges"></div><span class="hud-cap" id="badges-cap">Badges</span><div id="toasts" aria-live="polite"></div></div>
+    <div class="hud-i" title="Each objection after price that is not overcome costs a heart"><div class="hearts" id="hearts"></div><span class="hud-cap" id="hearts-cap">Hearts</span></div>
+    <div class="hud-i"><b id="score" class="mono">–</b><span class="delta" id="delta"></span><small>Score</small></div>
+    <div class="hud-i"><b id="timer" class="mono">–</b><small>Call time</small></div>
+    <button id="theme" class="btn icon" type="button" title="Switch light or dark theme" aria-label="Switch theme"></button>
+  </div>
+</header>
+
+<section id="status" aria-live="polite"></section>
+
+<main>
+  <aside class="col" id="left">
+    <section class="card" id="nba-card" data-level="1"><div class="ch"><h2>Next best action</h2><span class="pill" id="nba-meta"></span></div><div id="nba"></div></section>
+    <section class="card" id="rules-card" data-level="2"><div class="ch"><h2>Coach rules</h2><span class="pill" id="rules-meta">rules</span></div><div id="rules"></div></section>
+    <section class="card" id="file-card" data-level="2"><div class="ch"><h2>Prospect file</h2><span class="meta" id="facts-meta"></span></div><div id="facts"></div></section>
+  </aside>
+
+  <div class="col center">
+    <section class="card board-card">
+      <div class="ch"><h2>Flight path</h2>
+        <div class="legend-row"><span><i></i>Trail</span><span><i class="base"></i>Route</span><span><i class="dot"></i>Cleared</span><span><i class="lk"></i>Gate open</span></div>
+      </div>
+      <div id="board"></div>
+    </section>
+    <section class="card transcript-card">
+      <div class="ch"><h2>Live transcript</h2><div class="talk" id="talk"></div></div>
+      <div id="transcript"></div>
+    </section>
+  </div>
+
+  <aside class="col" id="right">
+    <section class="card" id="words-card" data-level="2"><div class="ch"><h2>In their words</h2><span class="meta" id="words-meta">verbatim check</span></div><div id="words"></div></section>
+    <section class="card" id="case-card" data-level="3"><div class="ch"><h2>Case strength</h2><span class="meta" id="case-meta">1 pt per real answer</span></div><div id="case"></div></section>
+    <section class="card" id="ladder-card" data-level="1"><div class="ch"><h2>Price ladder</h2><span class="meta" id="lad-meta"></span></div><div id="ladder"></div></section>
+    <section class="card" id="timeline-card" data-level="2"><div class="ch"><h2>Call timeline</h2><span class="meta" id="tl-meta"></span></div><div id="timeline"></div></section>
+  </aside>
+</main>
+
+<script>
+const NS = "http://www.w3.org/2000/svg";
+const FONT_CSS = "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap";
+// Badge names mirror the award() calls in src/call-state.mjs; /flow doesn't expose them. A badge the
+// server awards that isn't listed here still shows, with the generic icon.
+const BADGE_ICONS = {
+  "Disclosed": '<path d="M4 10v4h3l5 4V6L7 10H4zM16 9a4 4 0 0 1 0 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>',
+  "Case Built": '<path d="M7 4h10v17H7zM10 9h4M10 13h4M10 17h2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>',
+  "Price Presented": '<path d="M3 12V4h8l10 10-8 8L3 12z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><circle cx="7.5" cy="8.5" r="1.6" fill="currentColor"/>',
+  "Objection Crusher": '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3zM8.5 12l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>',
+  "App Started": '<path d="M4 20l4-1L19 8l-3-3L5 16l-1 4zM14 7l3 3" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>',
+  "Closed": '<path d="M7 4h10v5a5 5 0 0 1-10 0V4zM12 14v4M8 21h8M7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>',
+};
+const BADGE_FALLBACK = '<circle cx="12" cy="12" r="4" fill="currentColor"/>';
+const LANE_COLOR = { open: "var(--open)", qualify: "var(--qualify)", underwrite: "var(--underwrite)", present: "var(--present)", close: "var(--close)", exit: "var(--exit)" };
+// Edge chips: [text, where]. A number is a fraction along the path; "gap" centers the chip in the gap
+// after the first node row it passes, clear of node corners. The objection loop needs no chip; its node
+// shows a visit count. The edge into Lost gets a chip only when the hearts ran out (see paintEndChip).
+const EDGE_LABELS = { "price>commit": ["accepts", "gap"], "health>coverage": ["adjust", 0.5] };
+const BAD_END = new Set(["lost", "dnc"]);
+// A saved answer that is only a placeholder. The server gate checks != null, so these pass it.
+const UNKNOWN = /^(unknown|unsure|not sure|n\/?a|don'?t know|undecided|tbd|\?+)$/i;
+// Thresholds are designer choices, printed next to every rule that uses them.
+const RULE = { talkPct: 70, talkMinWords: 40, thinShare: 0.6, stallMs: 240000, echoWords: 4 };
+// A call with no event for this long is shown as stale, not live: it may have dropped without call_ended.
+const STALE_MS = 5 * 60000;
+// Follow mode keeps a finished call's banner up this long before moving to a call that is still live.
+const FOLLOW_HOLD_MS = 6000;
+// When the page didn't see the call from its start, a first transcript line this long after the first
+// stage move means older lines may have rolled off the server's capped transcript.
+const TRIM_GAP_MS = 10000;
+const CASE_STAGES = ["discovery", "coverage", "case_recap"];
+const WORD_KEYS = [["pain", "The pain"], ["why_now", "Why now"], ["protecting", "Protecting"]];
+const NO_HIGHLIGHT = new Set(["case_confirmed", "tier", "chosen_option"]);
+const STOP_VALUES = new Set(["none", "yes", "no", "self"]);
+const OUTCOME_TITLE = { won: "Won · Handoff reached", lost: "Lost", dnc: "Do not call", hangup: "Prospect hung up", voicemail: "Voicemail", no_answer: "No answer", callback: "Callback", not_qualified: "Not qualified" };
+const ICON = {
+  check: '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  x: '<svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>',
+  clock: '<svg viewBox="0 0 24 24"><path d="M12 7v6l4 2" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2.4"/></svg>',
+  phone: '<svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>',
+  lock: '<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M8 11V7a4 4 0 0 1 8 0v4" fill="none" stroke="currentColor" stroke-width="2.2"/></svg>',
+  unlock: '<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M8 11V7a4 4 0 0 1 7.6-1.7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  heart: '<svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-9.3-9.4C1.4 7.7 3.6 4.5 7 4.5c2 0 3.6 1.1 5 2.9 1.4-1.8 3-2.9 5-2.9 3.4 0 5.6 3.2 4.3 6.6-1.8 4.8-9.3 9.4-9.3 9.4z" fill="currentColor"/></svg>',
+  hex: '<svg viewBox="0 0 20 20"><path d="M10 1.8l7 4v8.4l-7 4-7-4V5.8z"/></svg>',
+  map: '<svg viewBox="0 0 24 24"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2zM9 4v14M15 6v14" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
+  sun: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  moon: '<svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
+};
+const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+const $ = (id) => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+
+function h(tag, props, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(props ?? {})) {
+    if (v == null || v === false) continue;
+    if (k === "class") n.className = v;
+    else if (k === "text") n.textContent = v;
+    else if (k === "style") n.style.cssText += ";" + v;
+    else if (k.startsWith("--")) n.style.setProperty(k, v);
+    else n.setAttribute(k, v);
+  }
+  for (const c of kids.flat(Infinity)) if (c != null && c !== false) n.append(c);
+  return n;
+}
+const svgEl = (tag, attrs = {}, parent) => {
+  const n = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  parent?.appendChild(n);
+  return n;
+};
+const svgFrom = (markup) => { const t = document.createElement("template"); t.innerHTML = markup.trim(); return t.content.firstChild; };
+const mmss = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+const span = (ms) => (ms > 0 && ms < 1000 ? "under 1s" : mmss(ms));
+const has = (f, k) => f[k] != null && String(f[k]).trim() !== "";
+const isUnknown = (v) => v != null && UNKNOWN.test(String(v).trim());
+const human = (k) => String(k).replace(/_/g, " ");
+const cap = (t) => String(t).charAt(0).toUpperCase() + String(t).slice(1);
+const words = (t) => String(t).split(/\s+/).filter(Boolean).length;
+const money = (n) => "$" + Number(n).toLocaleString("en-US", { maximumFractionDigits: 0 });
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const empty = (text) => h("div", { class: "empty", text });
+// replaceChildren would print a skipped (null) child as the text "null".
+const fill = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter((k) => k != null && k !== false));
+// Lowercase, straight apostrophes, punctuation to spaces, whitespace collapsed.
+const norm = (t) => String(t).toLowerCase().replace(/[‘’]/g, "'").replace(/[^a-z0-9' ]+/g, " ").replace(/\s+/g, " ").trim();
+
+// ORDER: every non-exit stage (the rail). MAIN: the main path from the first stage to the win,
+// walked through /flow, so side stages such as Objection are not counted as skipped steps.
+let FLOW, ORDER, MAIN, board;
+const calls = new Map();
+let currentId = params.get("call"), follow = !currentId, holdUntil = 0;
+let shown = { id: null, trailLen: 0, badges: [], score: 0, lives: null, trId: null };
+
+/* What this page saw live, per call. state.facts keeps only the latest value of each fact and has no
+   timestamps, so facts as they stood when a stage was entered exist only if the page saw that move.
+   entry[i]: facts when trail[i] was entered · lines: transcript events seen since call_started (null
+   when the page joined later) · mood: a stage event carried a mood (null: unknown, joined later) ·
+   lastSeen: when the page last got an event for the call. */
+const seen = new Map();
+const seenOf = (id) => seen.get(id) ?? seen.set(id, { entry: {}, lines: null, mood: null, lastSeen: 0 }).get(id);
+
+function observe(prev, s, event) {
+  const w = seenOf(s.callId);
+  w.lastSeen = Date.now();
+  if (!prev) {
+    if (event?.type !== "call_started") return;
+    w.lines = 0; w.mood = false; w.entry[0] = { ...s.facts };
+    return;
+  }
+  for (let i = prev.trail.length; i < s.trail.length; i++) w.entry[i] = { ...s.facts };
+  if (event?.type === "transcript" && w.lines != null) w.lines++;
+  if (event?.type === "stage" && event.mood) w.mood = true;
+  // Match the prospect's words while their lines are still in the capped transcript.
+  for (const [k] of WORD_KEYS) saidAt(s, k);
+  if (s.trail.some((t) => t.stage === "case_recap")) recapEcho(s);
+}
+
+/* ================= derivations: every value below comes from call state and /flow ================= */
+const ST = (id) => FLOW.STAGES[id];
+const isExit = (id) => ST(id)?.lane === "exit";
+const isTerm = (s) => Boolean(ST(s.stage)?.terminal);
+const firstAt = (s, stage) => s.trail.find((t) => t.stage === stage)?.at ?? null;
+const lastLive = (s) => [...s.trail].reverse().find((t) => !ST(t.stage).terminal)?.stage ?? "dialing";
+const nextMain = (id) => (ST(id).next ?? []).find((n) => n !== id && FLOW.STAGES[n] && !isExit(n));
+const selfLoop = (id) => (ST(id).next ?? []).includes(id);
+const gateReqs = (id) => [...new Set([...(ST(id).requires ?? []), ...(ST(id).terminal === "won" ? FLOW.HANDOFF_REQUIRES : [])])];
+const reqLabel = (k) => (k === "quote" ? "Quote run" : FLOW.FACTS[k]?.label ?? human(k));
+// ok: a real value · unk: a placeholder that still passes the server gate · todo: missing
+const factState = (facts, k) => (!has(facts, k) ? "todo" : isUnknown(facts[k]) ? "unk" : "ok");
+const reqState = (s, k) => (k === "quote" ? (s.quote ? "ok" : "todo") : factState(s.facts, k));
+const gateOpen = (s, id) => gateReqs(id).every((k) => reqState(s, k) !== "todo");
+// One stage-count definition everywhere: distinct main-path stages in the trail.
+const stagesReached = (s) => new Set(s.trail.map((t) => t.stage).filter((id) => MAIN.includes(id))).size;
+const openObjection = (s) => s.objections.filter((o) => o.afterPrice && o.resolved === null).at(-1) ?? null;
+
+// Last time the state shows activity. Facts carry no time, so the page also counts events it saw.
+function lastActivity(s) {
+  let t = Math.max(s.startedAt, s.trail.at(-1)?.at ?? 0, s.transcript.at(-1)?.at ?? 0, s.objections.at(-1)?.at ?? 0);
+  return Math.max(t, seen.get(s.callId)?.lastSeen ?? 0);
+}
+const isStale = (s) => !s.outcome && Date.now() - lastActivity(s) > STALE_MS;
+// A stale call's clocks stop at its last event instead of running on.
+const endOf = (s) => s.endedAt ?? (isStale(s) ? lastActivity(s) : Date.now());
+const ago = (ms) => (ms >= 3600000 ? `${Math.floor(ms / 3600000)}h ${Math.floor((ms % 3600000) / 60000)}m` : `${Math.max(1, Math.floor(ms / 60000))}m`);
+
+// Facts as they stood when trail[i] was entered, or null when this page didn't see that move.
+const factsAtEntry = (s, i) => seen.get(s.callId)?.entry[i] ?? null;
+
+// Older lines may have rolled off the server's capped transcript; /flow doesn't send the cap. Seen live,
+// that is a count. Otherwise: no call can hold more lines than the cap, so a call shorter than the
+// longest one here was never trimmed; for the longest, a first line well after the conversation
+// began is the sign.
+function transcriptTrimmed(s) {
+  if (!s.transcript.length) return false;
+  const lines = seen.get(s.callId)?.lines;
+  if (lines != null) return lines > s.transcript.length;
+  if (s.transcript.length < Math.max(...[...calls.values()].map((c) => c.transcript.length))) return false;
+  const talkStart = s.trail[1]?.at ?? s.startedAt;
+  return s.transcript[0].at > talkStart + TRIM_GAP_MS;
+}
+
+// Mood is Sarah's read, carried on stage events. initialState defaults it to neutral, so a neutral
+// value means nothing until a stage event has carried a mood.
+function moodOf(s) {
+  const w = seen.get(s.callId);
+  if (s.mood !== "neutral" || w?.mood) return { st: "reported", v: s.mood };
+  return w?.mood === false ? { st: "none", v: null } : { st: "maybe", v: s.mood };
+}
+
+function stageTimes(s) {
+  const out = {};
+  s.trail.forEach((t, i) => {
+    const end = s.trail[i + 1]?.at ?? (ST(t.stage).terminal ? t.at : endOf(s));
+    out[t.stage] = (out[t.stage] ?? 0) + Math.max(0, end - t.at);
+  });
+  return out;
+}
+
+function tierOf(n, total) {
+  const strong = Math.ceil(total * 0.7), building = Math.ceil(total * 0.4);
+  const word = total && n >= total ? "Airtight" : n >= strong ? "Strong" : n >= building ? "Building" : "Weak";
+  const c = { Airtight: "var(--good)", Strong: "var(--qualify)", Building: "var(--warn)", Weak: "var(--bad)" }[word];
+  const legend = `Weak 0–${building - 1} · Building ${building}–${strong - 1} · Strong ${strong}–${total - 1} · Airtight ${total}`;
+  return { word, c, legend };
+}
+
+function caseStrength(s) {
+  const rows = Object.keys(FLOW.FACTS).filter((k) => FLOW.FACTS[k].group === "needs")
+    .map((k) => ({ k, label: FLOW.FACTS[k].label, v: s.facts[k], st: reqState(s, k) }));
+  const n = rows.filter((r) => r.st === "ok").length;
+  return { rows, n, total: rows.length, tier: tierOf(n, rows.length) };
+}
+
+function talk(s) {
+  let bot = 0, pro = 0;
+  for (const l of s.transcript) { const n = words(l.text); if (l.speaker === "bot") bot += n; else pro += n; }
+  const total = bot + pro;
+  return { bot, pro, total, botPct: total ? Math.round((bot / total) * 100) : 0, lines: s.transcript.length };
+}
+
+// Walk the main path forward and stop at the first gate that is not fully met with real answers.
+function nextGate(s, from) {
+  const seen = new Set([from]);
+  let id = from, steps = 0;
+  while ((id = nextMain(id)) && !seen.has(id)) {
+    seen.add(id); steps++;
+    const reqs = gateReqs(id);
+    if (reqs.some((k) => reqState(s, k) !== "ok")) return { id, steps, reqs };
+  }
+  return null;
+}
+
+function pathAhead(from, n = 5) {
+  const out = [], seen = new Set([from]);
+  let id = from;
+  while (out.length < n && (id = nextMain(id)) && !seen.has(id)) { seen.add(id); out.push(id); }
+  return out;
+}
+
+// Status straight from o.resolved. Before price the reducer never settles an objection, so a missing
+// verdict there is tagged "before price" (no heart at stake), not "open" and not "smoke screen".
+function objStatus(o) {
+  if (o.resolved === true) return { k: "var(--good)", s: "overcome" };
+  if (o.resolved === false) return { k: "var(--bad)", s: "not overcome" };
+  return o.afterPrice ? { k: "var(--warn)", s: "open" } : { k: "var(--muted)", s: "before price" };
+}
+
+// The objection raised last before the call left for an exit (no stage move in between).
+function exitObjection(s) {
+  if (!isTerm(s) || s.outcome === "won" || !s.objections.length) return null;
+  const last = s.objections.at(-1), liveAt = s.trail.findLast((t) => !ST(t.stage).terminal)?.at ?? s.startedAt;
+  return last.at >= liveAt ? last : null;
+}
+
+// The prospect line that holds this value word for word, if it is still in the recent transcript.
+function spokenAt(s, value) {
+  const v = norm(value);
+  if (v.length < 4) return null;
+  return s.transcript.find((l) => l.speaker === "prospect" && norm(l.text).includes(v)) ?? null;
+}
+
+// Same check for a saved fact, remembering matches this page saw: once the line rolls off the capped
+// transcript the match still stands for the same value. A reload loses that memory, and says so.
+function saidAt(s, k) {
+  const v = s.facts[k];
+  if (!has(s.facts, k) || isUnknown(v)) return null;
+  const line = spokenAt(s, v), w = seen.get(s.callId);
+  if (line) { if (w) (w.said ??= {})[k] = { v, at: line.at }; return line; }
+  const c = w?.said?.[k];
+  return c && c.v === v ? { at: c.at, remembered: true } : null;
+}
+
+// Longest run of consecutive words two texts share.
+function sharedRun(a, b) {
+  const x = norm(a).split(" "), y = norm(b).split(" ");
+  let best = [], prev = new Array(y.length + 1).fill(0);
+  for (let i = 1; i <= x.length; i++) {
+    const cur = new Array(y.length + 1).fill(0);
+    for (let j = 1; j <= y.length; j++) if (x[i - 1] === y[j - 1]) {
+      cur[j] = prev[j - 1] + 1;
+      if (cur[j] > best.length) best = x.slice(i - cur[j], i);
+    }
+    prev = cur;
+  }
+  return best;
+}
+
+// Did Sarah's recap lines reuse the prospect's own words? Only a pain or why-now value found word for
+// word in a prospect line counts as their words; a paraphrase saved by Sarah can't be checked.
+function recapEcho(s) {
+  const r = recapEchoNow(s), w = seen.get(s.callId);
+  if (r.st === "ok" || r.st === "bad") { if (w) w.echo = r; return r; }
+  // Recap lines that rolled off after this page checked them keep the verdict it saw.
+  return r.rolled && w?.echo ? { ...w.echo, v: `${w.echo.v} (checked live)` } : r;
+}
+
+function recapEchoNow(s) {
+  const recapAt = firstAt(s, "case_recap");
+  if (!recapAt) return { st: "info", v: "no recap yet" };
+  if (!s.transcript.length) return { st: "info", v: "no transcript to check" };
+  const saved = ["pain", "why_now"].filter((k) => has(s.facts, k) && !isUnknown(s.facts[k]));
+  if (!saved.length) return { st: "info", v: "no pain saved" };
+  const sources = saved.filter((k) => saidAt(s, k));
+  if (!sources.length) {
+    if (s.transcript[0].at > recapAt || transcriptTrimmed(s)) return { st: "info", v: "can't check: the lines with their words rolled off the transcript", rolled: true };
+    return { st: "info", v: "pain saved as Sarah's note, so their exact words can't be checked" };
+  }
+  if (s.transcript[0].at > recapAt) return { st: "info", v: "can't check: the recap lines rolled off the transcript", rolled: true };
+  const leftAt = s.trail.find((t) => t.at > recapAt && t.stage !== "case_recap")?.at ?? endOf(s);
+  const lines = s.transcript.filter((l) => l.speaker === "bot" && l.at >= recapAt && l.at <= leftAt);
+  if (!lines.length) return { st: "info", v: "no recap lines yet" };
+  let best = [];
+  for (const l of lines) for (const k of sources) { const r = sharedRun(l.text, s.facts[k]); if (r.length > best.length) best = r; }
+  return best.length >= RULE.echoWords ? { st: "ok", v: `“${best.join(" ")}”` } : { st: "bad", v: `no ${RULE.echoWords}+ word phrase from their own words` };
+}
+
+// Case strength as it stood when price was first shown, from the facts this page saw at that move.
+function caseAtPrice(s) {
+  const i = s.trail.findIndex((t) => t.stage === "price");
+  if (i < 0) return { st: "none" };
+  const facts = factsAtEntry(s, i), now = caseStrength(s);
+  if (!facts) return { st: "unseen", now };
+  const then = caseStrength({ facts });
+  const later = now.rows.filter((r, j) => r.st === "ok" && then.rows[j].st !== "ok").map((r) => r.label);
+  return { st: "seen", then, now, later, thin: Math.ceil(then.total * RULE.thinShare) };
+}
+
+// Gate facts that held a placeholder when their stage was entered. Moves this page saw are judged on
+// the facts at that moment; earlier moves only on today's facts, and listed as unchecked when clean.
+function gateAudit(s) {
+  const hits = [], unseen = [];
+  let gated = 0;
+  s.trail.forEach((t, i) => {
+    const reqs = gateReqs(t.stage).filter((k) => k !== "quote");
+    if (!reqs.length) return;
+    gated++;
+    const then = factsAtEntry(s, i);
+    if (then) {
+      for (const k of reqs) if (factState(then, k) === "unk") hits.push({ id: t.stage, k, was: then[k], now: reqState(s, k) === "ok" ? s.facts[k] : null });
+      return;
+    }
+    const nowHits = reqs.filter((k) => reqState(s, k) === "unk");
+    for (const k of nowHits) hits.push({ id: t.stage, k, was: null, now: null, still: s.facts[k] });
+    if (!nowHits.length && !unseen.includes(t.stage)) unseen.push(t.stage);
+  });
+  return { gated, hits, unseen };
+}
+
+function discipline(s) {
+  const priceAt = firstAt(s, "price"), quoteAt = firstAt(s, "quote"), recapAt = firstAt(s, "case_recap");
+  const cutoff = priceAt ?? endOf(s);
+  let caseMs = 0, preMs = 0, recapMs = 0;
+  s.trail.forEach((t, i) => {
+    if (t.at >= cutoff || ST(t.stage).terminal) return;
+    const end = Math.min(s.trail[i + 1]?.at ?? endOf(s), cutoff);
+    preMs += end - t.at;
+    if (CASE_STAGES.includes(t.stage)) caseMs += end - t.at;
+    if (t.stage === "case_recap") recapMs += end - t.at;
+  });
+  return { priceAt, quoteAt, recapAt, caseMs, preMs, recapMs, share: preMs ? Math.round((caseMs / preMs) * 100) : 0 };
+}
+
+function rules(s) {
+  const out = [];
+  const add = (label, st, detail) => out.push({ label, st, detail });
+  const live = !isTerm(s);
+  const limit = FLOW.OBJECTION_LIMIT;
+
+  const t = talk(s);
+  if (t.total < RULE.talkMinWords) add(`Sarah under ${RULE.talkPct}% of recent words`, "wait", `Needs ${RULE.talkMinWords}+ words of transcript`);
+  else if (t.botPct > RULE.talkPct) add(`Sarah has ${t.botPct}% of recent words`, "flag", `Rule: over ${RULE.talkPct}% of the words in the last ${t.lines} lines`);
+  else add(`Sarah at ${t.botPct}% of recent words`, "pass", `Rule: flags over ${RULE.talkPct}%`);
+
+  // Gates: judged on the facts held when each gated stage was entered.
+  const ga = gateAudit(s);
+  const uniq = [...new Map(ga.hits.map((x) => [`${x.id}:${x.k}`, x])).values()];
+  if (!ga.gated) add("Gates passed on real answers", "wait", "Checks once the call enters a gated stage");
+  else if (uniq.length) {
+    const x = uniq[0], more = uniq.length > 1 ? ` (+${uniq.length - 1} more)` : "";
+    if (x.was != null) add(`${ST(x.id).label} entered on a placeholder: ${reqLabel(x.k)} was “${x.was}”`, "flag",
+      (x.now != null ? `Real answer saved after entry: “${x.now}”` : "Rule: a gate fact held a placeholder, not an answer") + more);
+    else add(`${reqLabel(x.k)} is “${x.still}” yet ${ST(x.id).label} was entered`, "flag", "Rule: a gate fact holds a placeholder, not an answer" + more);
+  } else if (ga.unseen.length) add("Gates passed on real answers", "nc", `Can't check: this page loaded after ${ga.unseen.map((id) => ST(id).label).join(", ")} ${ga.unseen.length === 1 ? "was" : "were"} entered, and facts carry no timestamps`);
+  else add("Gates passed on real answers", "pass", "No placeholder in a gate fact when its stage was entered");
+
+  // Case at price: judged on the facts held when price was first shown, never on facts saved later.
+  const cp = caseAtPrice(s), total = caseStrength(s).total, thinAt = Math.ceil(total * RULE.thinShare);
+  if (cp.st === "none") add(`Case at ${thinAt}/${total}+ before price`, "wait", "Checks once price is shown");
+  else if (cp.st === "unseen") add(`Case at ${thinAt}/${total}+ before price`, "nc", `Can't check: loaded after price was shown. Case now ${cp.now.n}/${cp.now.total}; its value at price wasn't seen`);
+  else {
+    const after = cp.later.length ? ` · ${cp.later.length} filled after price` : "";
+    if (cp.then.n < cp.thin) add(`Price shown on a thin case (${cp.then.n}/${cp.then.total})`, "alert", `Rule: case under ${cp.thin}/${cp.then.total} when price was shown${after}`);
+    else add(`Case ${cp.then.n}/${cp.then.total} (${cp.then.tier.word}) when price was shown`, "pass", `Rule: flags under ${cp.thin}/${cp.then.total}${after}`);
+  }
+
+  const open = openObjection(s);
+  const post = s.objections.filter((o) => o.afterPrice), missed = post.filter((o) => o.resolved === false).length;
+  if (open) add(`Open objection: ${cap(human(open.kind))}`, live ? "alert" : "flag", live ? "Raised after price, not overcome yet" : "The call ended with it still open");
+  else if (missed) add(`${missed} of ${post.length} objection${post.length === 1 ? "" : "s"} after price not overcome`, "flag", `Each one cost a heart`);
+  else if (post.length) add(`Every objection after price overcome (${post.length})`, "pass");
+  else add("Objections after price overcome", "wait", live ? "None raised after price yet" : "None raised after price");
+
+  if (!live) add("More than one heart left", "na", "Call ended");
+  else if (!s.pricePresented) add("More than one heart left", "wait", "Hearts are only at risk after price");
+  else if (s.livesLeft <= 1) add(`${s.livesLeft} heart left`, "alert", "One more objection not overcome ends the call");
+  else add(`${s.livesLeft} of ${limit} hearts left`, "pass");
+
+  const md = moodOf(s);
+  if (!live) add("Prospect not cold (Sarah's read)", "na", "Call ended");
+  else if (md.st === "none") add("Prospect not cold (Sarah's read)", "wait", "No stage move has reported a mood yet");
+  else if (md.st === "maybe") add("Prospect not cold (Sarah's read)", "wait", "Neutral may be the default: no mood seen since this page loaded");
+  else if (md.v === "cold") add("Sarah reads the prospect as cold", "flag", "Mood set to cold on a stage move");
+  else add(`Sarah reads the prospect as ${md.v}`, "pass", "Mood reported on a stage move");
+
+  if (!live) add(`Under ${mmss(RULE.stallMs)} in one stage`, "na", "Call ended");
+  else if (isStale(s)) add(`No events for ${ago(Date.now() - lastActivity(s))}`, "flag", "The call may have dropped without call_ended. Clocks stop at its last event");
+  else {
+    const ms = Date.now() - s.trail.at(-1).at;
+    if (ms > RULE.stallMs) add(`${mmss(ms)} in ${ST(s.stage).label}`, "flag", `Rule: over ${mmss(RULE.stallMs)} in one stage`);
+    else add(`Under ${mmss(RULE.stallMs)} in ${ST(s.stage).label}`, "pass");
+  }
+  // A rule that never got the chance to apply reads n/a once the call is over.
+  if (!live) for (const r of out) if (r.st === "wait") r.st = "na";
+  return out;
+}
+
+/* ================= inline fact highlights: exact text matches only ================= */
+function factNeedles(s) {
+  const out = [];
+  for (const [key, raw] of Object.entries(s.facts)) {
+    if (!has(s.facts, key) || isUnknown(raw) || NO_HIGHLIGHT.has(key)) continue;
+    const v = String(raw).trim().replace(/[.!?]+$/, "");
+    const needs = FLOW.FACTS[key]?.group === "needs";
+    const label = FLOW.FACTS[key]?.label ?? human(key);
+    const frags = new Set();
+    if (v.length >= 3 && !STOP_VALUES.has(v.toLowerCase())) frags.add(v);
+    for (const f of v.split(/[,;:()]|\s-\s|—/)) { const t = f.trim().replace(/[.]+$/, ""); if (words(t) >= 2 && t.length >= 6) frags.add(t); }
+    for (const text of frags) out.push({ key, label, needs, text: text.toLowerCase().replace(/[‘’]/g, "'") });
+  }
+  return out.sort((a, b) => b.text.length - a.text.length);
+}
+
+function highlight(text, needles) {
+  const lower = text.toLowerCase().replace(/[‘’]/g, "'");
+  const ranges = [], keys = new Map();
+  for (const n of needles) {
+    let from = 0, i;
+    while ((i = lower.indexOf(n.text, from)) !== -1) {
+      const end = i + n.text.length;
+      const edge = (i === 0 || !/\w/.test(lower[i - 1])) && (end === lower.length || !/\w/.test(lower[end]));
+      if (edge && !ranges.some((r) => i < r.end && end > r.start)) { ranges.push({ start: i, end, n }); if (!keys.has(n.key)) keys.set(n.key, n); }
+      from = end;
+    }
+  }
+  ranges.sort((a, b) => a.start - b.start);
+  const nodes = [];
+  let at = 0;
+  for (const r of ranges) {
+    if (r.start > at) nodes.push(text.slice(at, r.start));
+    nodes.push(h("mark", { class: r.n.needs ? "needs" : "", title: r.n.label, text: text.slice(r.start, r.end) }));
+    at = r.end;
+  }
+  if (at < text.length) nodes.push(text.slice(at));
+  return { nodes, keys: [...keys.values()] };
+}
+
+/* ================= board: layout and routing computed from /flow ================= */
+function roundPath(pts, r = 9) {
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [px, py] = pts[i - 1], [cx, cy] = pts[i], [nx, ny] = pts[i + 1];
+    const l1 = Math.hypot(cx - px, cy - py), l2 = Math.hypot(nx - cx, ny - cy);
+    const rr = Math.min(r, l1 / 2, l2 / 2);
+    if (!rr) { d += ` L${cx},${cy}`; continue; }
+    d += ` L${cx - ((cx - px) / l1) * rr},${cy - ((cy - py) / l1) * rr} Q${cx},${cy} ${cx + ((nx - cx) / l2) * rr},${cy + ((ny - cy) / l2) * rr}`;
+  }
+  const last = pts[pts.length - 1];
+  return d + ` L${last[0]},${last[1]}`;
+}
+
+function pointAlong(pts, t) {
+  const segs = pts.slice(1).map((p, i) => Math.hypot(p[0] - pts[i][0], p[1] - pts[i][1]));
+  let half = segs.reduce((a, b) => a + b, 0) * t, i = 0;
+  while (i < segs.length - 1 && half > segs[i]) half -= segs[i++];
+  const f = segs[i] ? half / segs[i] : 0;
+  return [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * f, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * f];
+}
+
+function buildBoard(flow) {
+  const { LANES, STAGES } = flow;
+  // Big nodes and narrow gutters so labels stay readable when the board scales down at 1366.
+  const W = 140, H = 50, GAP = 60, PADX = 16, TOPY = 46, VGAP = 18, EXGAP = 10;
+  const laneIds = LANES.filter((l) => l.id !== "exit").map((l) => l.id);
+  const lastLane = laneIds.length - 1;
+  const laneIdx = (id) => laneIds.indexOf(STAGES[id].lane);
+  const pos = {}, row = {};
+  const maxRows = Math.max(...laneIds.map((l) => Object.values(STAGES).filter((s) => s.lane === l).length));
+  laneIds.forEach((lane, li) => {
+    Object.keys(STAGES).filter((id) => STAGES[id].lane === lane).forEach((id, r) => {
+      const x = PADX + li * (W + GAP), y = TOPY + r * (H + VGAP);
+      pos[id] = { x, y, w: W, h: H, cx: x + W / 2, cy: y + H / 2 };
+      row[id] = r;
+    });
+  });
+  const totalW = PADX * 2 + laneIds.length * W + (laneIds.length - 1) * GAP;
+  const rowsBottom = TOPY + maxRows * H + (maxRows - 1) * VGAP;
+  const exitTop = rowsBottom + 100;
+  const exits = Object.keys(STAGES).filter((id) => STAGES[id].lane === "exit");
+  const EXW = Math.min(150, (totalW - 2 * PADX - (exits.length - 1) * EXGAP) / Math.max(1, exits.length));
+  exits.forEach((id, i) => {
+    const x = PADX + i * (EXW + EXGAP);
+    pos[id] = { x, y: exitTop, w: EXW, h: H, cx: x + EXW / 2, cy: exitTop + H / 2 };
+  });
+  const height = exitTop + H + 12;
+
+  const svg = svgEl("svg", { viewBox: `0 0 ${totalW} ${height}`, role: "img", "aria-label": "Call flow map", preserveAspectRatio: "xMidYMid meet" });
+  const defs = svgEl("defs", {}, svg);
+  for (const [id, cls] of [["arr", "var(--edge)"], ["arr-lit", "var(--lit)"]]) {
+    const m = svgEl("marker", { id, viewBox: "0 0 10 10", refX: 8, refY: 5, markerWidth: 5.5, markerHeight: 5.5, orient: "auto-start-reverse" }, defs);
+    svgEl("path", { d: "M0 1 L9 5 L0 9 z", style: `fill:${cls}` }, m);
+  }
+  const gBands = svgEl("g", {}, svg), gEdges = svgEl("g", {}, svg), gLit = svgEl("g", {}, svg), gChips = svgEl("g", {}, svg);
+  const gNodes = svgEl("g", {}, svg), gToken = svgEl("g", {}, svg);
+
+  laneIds.forEach((lane, li) => {
+    const x = PADX + li * (W + GAP);
+    const c = LANE_COLOR[lane] ?? "var(--exit)";
+    svgEl("rect", { x: x - 8, y: 8, width: W + 16, height: rowsBottom, rx: 13, class: "band", style: `--c:${c}` }, gBands);
+    svgEl("text", { x: x + W / 2, y: 31, class: "lane-title", style: `--c:${c}` }, gBands).textContent = LANES.find((l) => l.id === lane).label;
+  });
+  svgEl("rect", { x: PADX - 8, y: exitTop - 26, width: totalW - 2 * PADX + 16, height: H + 34, rx: 13, class: "band", style: "--c:var(--exit)" }, gBands);
+  // Above the edges with a halo: routes into the first exits pass under this title.
+  svgEl("text", { x: PADX + 2, y: exitTop - 9, class: "lane-title halo", style: "--c:var(--exit);text-anchor:start" }, gChips).textContent = LANES.find((l) => l.id === "exit")?.label ?? "Exits";
+
+  // Routing: vertical runs use slots in the gutter between lanes, exit routes use
+  // horizontal channels above the exits band. A dry run sizes both to fit.
+  const edgeList = [];
+  for (const [from, s] of Object.entries(STAGES)) for (const to of s.next ?? []) if (STAGES[to]) edgeList.push([from, to]);
+  const inEdges = {};
+  for (const [, to] of edgeList) if (STAGES[to].lane === "exit") inEdges[to] = (inEdges[to] ?? 0) + 1;
+  let slots, inSeen, channel, step = 8, chStep = 8, tempSlot = 8, tempChannel = 8;
+  const resetRouting = () => { slots = {}; inSeen = {}; channel = 0; };
+  const slotX = (g, k) => PADX + g * (W + GAP) + W + 9 + k * step;
+  const nextSlot = (g) => slotX(g, (slots[g] = (slots[g] ?? -1) + 1));
+  const hasReverse = (a, b) => a !== b && (STAGES[b].next ?? []).includes(a);
+
+  function route(a, b, temp) {
+    const A = pos[a], B = pos[b];
+    if (a === b) return [[A.x + A.w, A.cy - 12], [A.x + A.w + 22, A.cy - 12], [A.x + A.w + 22, A.cy + 12], [A.x + A.w, A.cy + 12]];
+    if (STAGES[a].lane === "exit") return [[A.cx, A.y], [B.cx, B.y + B.h]];
+    if (STAGES[b].lane === "exit") {
+      // The last lane has no gutter on its right, so its exits leave from the left side.
+      const g = laneIdx(a), right = g < lastLane, gutter = right ? g : g - 1;
+      const gx = temp ? slotX(gutter, tempSlot) : nextSlot(gutter);
+      const chY = exitTop - 34 - chStep * (temp ? tempChannel : channel++);
+      const n = inEdges[b] ?? 1, k = temp ? 0 : (inSeen[b] = (inSeen[b] ?? -1) + 1);
+      const bx = B.cx + (temp ? 0 : (k - (n - 1) / 2) * 14);
+      return [[right ? A.x + W : A.x, A.cy], [gx, A.cy], [gx, chY], [bx, chY], [bx, B.y]];
+    }
+    const rev = hasReverse(a, b);
+    if (STAGES[a].lane === STAGES[b].lane) {
+      const d = row[b] - row[a];
+      if (Math.abs(d) === 1) {
+        const x = A.cx + (rev ? (d > 0 ? -10 : 10) : 0);
+        return d > 0 ? [[x, A.y + H], [x, B.y]] : [[x, A.y], [x, B.y + H]];
+      }
+      const g = laneIdx(a), right = g < lastLane;
+      const gx = nextSlot(right ? g : g - 1);
+      return right ? [[A.x + W, A.cy], [gx, A.cy], [gx, B.cy], [B.x + W, B.cy]] : [[A.x, A.cy], [gx, A.cy], [gx, B.cy], [B.x, B.cy]];
+    }
+    const dyA = rev ? -9 : 0, dyB = rev ? 9 : 0;
+    const forward = laneIdx(b) > laneIdx(a);
+    const gx = nextSlot(forward ? laneIdx(b) - 1 : laneIdx(a) - 1);
+    const p0 = forward ? [A.x + W, A.cy + dyA] : [A.x, A.cy + dyA];
+    const p1 = forward ? [B.x, B.cy + dyB] : [B.x + W, B.cy + dyB];
+    return p0[1] === p1[1] ? [p0, p1] : [p0, [gx, p0[1]], [gx, p1[1]], p1];
+  }
+
+  resetRouting();
+  for (const [a, b] of edgeList) route(a, b, false);
+  const maxSlot = Math.max(0, ...Object.values(slots));
+  step = Math.min(8, (GAP - 16) / (maxSlot + 2));
+  tempSlot = maxSlot + 1;
+  chStep = Math.min(8, (exitTop - 34 - rowsBottom - 12) / Math.max(1, channel + 1));
+  tempChannel = channel;
+  resetRouting();
+
+  const edges = {}, chips = [];
+  // "gap": on the first vertical run, centered in the gap between the start row and the next one.
+  function chipPoint(pts, at) {
+    if (at !== "gap") return pointAlong(pts, at);
+    const i = pts.findIndex((p, j) => j > 0 && p[0] === pts[j - 1][0] && p[1] !== pts[j - 1][1]);
+    if (i < 0) return pointAlong(pts, 0.5);
+    const dir = Math.sign(pts[i][1] - pts[i - 1][1]);
+    return [pts[i][0], pts[0][1] + dir * (H / 2 + VGAP / 2)];
+  }
+  function addChip(text, [cx, cy], parent, cls = "") {
+    const g = svgEl("g", { class: cls }, parent);
+    const rect = svgEl("rect", { x: cx - 40, y: cy - 12, width: 80, height: 24, rx: 12, class: "chip-bg" }, g);
+    const tx = svgEl("text", { x: cx, y: cy + 6, class: "chip-tx" }, g);
+    tx.textContent = text;
+    const chip = { g, rect, tx, cx, cy, text };
+    chips.push(chip);
+    sizeChip(chip);
+    return chip;
+  }
+  function drawEdge(from, to, temp) {
+    const id = `${from}>${to}`;
+    const pts = route(from, to, temp);
+    const path = svgEl("path", { d: roundPath(pts), class: `edge${from === to ? " loop" : ""}${temp ? " temp" : ""}`, "marker-end": "url(#arr)" }, gEdges);
+    edges[id] = { poly: path, pts, temp };
+    const label = EDGE_LABELS[id];
+    if (label && !temp) addChip(label[0], chipPoint(pts, label[1]), gChips);
+    return edges[id];
+  }
+  for (const [from, to] of edgeList) drawEdge(from, to, false);
+
+  const nodes = {};
+  for (const [id, s] of Object.entries(STAGES)) {
+    const p = pos[id];
+    const color = BAD_END.has(id) ? "var(--bad)" : LANE_COLOR[s.lane] ?? "var(--exit)";
+    const g = svgEl("g", { class: "node" + (s.lane === "exit" ? " exit" : ""), style: `--c:${color}` }, gNodes);
+    const reqs = gateReqs(id);
+    svgEl("title", {}, g).textContent = [s.goal ? `${s.label}: ${s.goal}` : s.label, reqs.length ? `Gate: needs ${reqs.map(reqLabel).join(", ")}` : ""].filter(Boolean).join("\n");
+    svgEl("rect", { x: p.x, y: p.y, width: p.w, height: p.h, rx: 12, class: "halo" }, g);
+    svgEl("rect", { x: p.x, y: p.y, width: p.w, height: p.h, rx: 12, class: "bg" }, g);
+    const lbl = svgEl("text", { x: p.cx, y: p.cy + 7, class: "lbl" }, g);
+    lbl.textContent = s.label;
+    const tm = svgEl("text", { x: p.cx, y: p.cy + 17, class: "tm" }, g);
+    nodes[id] = { g, p, lbl, tm, gated: reqs.length > 0, mark: null, markEl: null };
+  }
+
+  const token = svgEl("g", { id: "token", opacity: 0 }, gToken);
+  svgEl("circle", { r: 11, class: "ring" }, token);
+  svgEl("circle", { r: 11, class: "core" }, token);
+  svgEl("path", { class: "ph", d: "M-4.6 -4.2c.6-.6 1.5-.6 2 0l1.2 1.4c.4.5.4 1.2 0 1.6l-.7.7c.5 1.2 1.4 2.2 2.6 2.7l.7-.7c.4-.4 1.1-.4 1.6 0l1.4 1.2c.6.5.6 1.4 0 2l-.8.8c-.8.8-2.1 1-3.1.4C-.6 4.4-3.3 1.8-4.9-1.1c-.6-1-.4-2.3.4-3.1z" }, token);
+
+  return { svg, pos, nodes, edges, drawEdge, token, gLit, gChips, chips, addChip };
+}
+
+// Chips size to their text; the width is only known once the board is in the page and fonts settle.
+function sizeChip(c) {
+  let w = c.text.length * 9.4 + 20;
+  try { const m = c.tx.getComputedTextLength(); if (m > 0) w = m + 22; } catch {}
+  c.rect.setAttribute("x", c.cx - w / 2);
+  c.rect.setAttribute("width", w);
+}
+
+// Shrink any label that would overflow its node (long stage names, fallback fonts).
+function fitLabels() {
+  for (const n of Object.values(board.nodes)) {
+    n.lbl.removeAttribute("textLength"); n.lbl.removeAttribute("lengthAdjust");
+    const max = n.p.w - 18;
+    try { if (n.lbl.getComputedTextLength() > max) { n.lbl.setAttribute("textLength", max); n.lbl.setAttribute("lengthAdjust", "spacingAndGlyphs"); } } catch {}
+  }
+  board.chips.forEach(sizeChip);
+}
+
+function resetBoard() {
+  for (const [id, e] of Object.entries(board.edges)) {
+    if (e.temp) { e.poly.remove(); delete board.edges[id]; continue; }
+    e.poly.classList.remove("lit");
+    e.poly.setAttribute("marker-end", "url(#arr)");
+  }
+  for (const n of Object.values(board.nodes)) {
+    n.g.classList.remove("visited", "current", "final");
+    n.markEl?.remove(); n.markEl = null; n.mark = null;
+    n.tm.textContent = "";
+  }
+  paintEndChip(null);
+  board.token.setAttribute("opacity", 0);
+}
+
+// The edge into Lost is labelled only when the hearts ran out. A move to Lost with hearts left was the
+// bot's call, and the banner says so; the edge stays unlabelled.
+function paintEndChip(s) {
+  const key = s && s.outcome === "lost" && s.livesLeft === 0 ? `${s.callId}:${s.traveled.at(-1)}` : null;
+  if (board.endChip?.key === key) return;
+  if (board.endChip) { board.endChip.g.remove(); board.chips.splice(board.chips.indexOf(board.endChip), 1); board.endChip = null; }
+  const e = key && board.edges[s.traveled.at(-1)];
+  if (!e) return;
+  board.endChip = board.addChip(`out of hearts (${FLOW.OBJECTION_LIMIT})`, pointAlong(e.pts, 0.5), board.gChips, "chip-end");
+  board.endChip.key = key;
+}
+
+function lightEdge(id) {
+  let e = board.edges[id];
+  if (!e) {
+    const [from, to] = id.split(">");
+    if (!board.pos[from] || !board.pos[to]) return null;
+    e = board.drawEdge(from, to, true);
+  }
+  e.poly.classList.add("lit");
+  e.poly.setAttribute("marker-end", "url(#arr-lit)");
+  board.gLit.appendChild(e.poly);
+  return e;
+}
+
+let animId = 0;
+const restPoint = (stage) => { const p = board.pos[stage]; return [p.x + 4, p.y + 4]; };
+function animateAlong(e, done) {
+  const my = ++animId;
+  const { pts } = e;
+  const segs = pts.slice(1).map((p, i) => Math.hypot(p[0] - pts[i][0], p[1] - pts[i][1]));
+  const total = segs.reduce((a, b) => a + b, 0);
+  const dur = Math.min(1400, 350 + total * 1.2);
+  const t0 = performance.now();
+  board.token.setAttribute("opacity", 1);
+  (function frame(now) {
+    if (my !== animId) return;
+    const p = Math.min(1, (now - t0) / dur);
+    const ease = 1 - Math.pow(1 - p, 3);
+    let dist = ease * total, i = 0;
+    while (i < segs.length - 1 && dist > segs[i]) dist -= segs[i++];
+    const f = segs[i] ? dist / segs[i] : 1;
+    board.token.setAttribute("transform", `translate(${pts[i][0] + (pts[i + 1][0] - pts[i][0]) * f},${pts[i][1] + (pts[i + 1][1] - pts[i][1]) * f})`);
+    if (p < 1) requestAnimationFrame(frame); else done();
+  })(t0);
+}
+
+// Corner marker per node: check when cleared forward, red X or slate stop on a reached exit, and a
+// lock (gold when its facts are in) on a gate ahead. A loop stage shows its visit count in the node.
+function markFor(s, id, visited, cleared) {
+  const st = ST(id), live = !isTerm(s);
+  if (st.lane === "exit") return visited.has(id) ? (BAD_END.has(id) ? "x" : "end") : null;
+  if (id === s.stage && live) return null;
+  if (visited.has(id) && selfLoop(id)) return null;
+  if (cleared.has(id) || (id === s.stage && st.terminal === "won")) return "check";
+  if (!visited.has(id) && board.nodes[id].gated) return !gateOpen(s, id) ? "lock" : gateReqs(id).some((k) => reqState(s, k) === "unk") ? "weak" : "open";
+  return null;
+}
+
+function drawMark(n, mark) {
+  const x = n.p.x + n.p.w - 4, y = n.p.y + 4;
+  const g = svgEl("g", { transform: `translate(${x},${y})` }, n.g);
+  if (mark === "check") { g.setAttribute("class", "mk-check"); svgEl("circle", { r: 10 }, g); svgEl("path", { d: "M-4.5 0.5 l3 3 l6 -6.5" }, g); }
+  else if (mark === "x") { g.setAttribute("class", "mk-x"); svgEl("circle", { r: 10 }, g); svgEl("path", { d: "M-3.8 -3.8 L3.8 3.8 M3.8 -3.8 L-3.8 3.8" }, g); }
+  else if (mark === "end") { g.setAttribute("class", "mk-end"); svgEl("circle", { r: 10 }, g); svgEl("rect", { x: -3.6, y: -3.6, width: 7.2, height: 7.2, rx: 1.2 }, g); }
+  else if (mark === "lock" || mark === "open" || mark === "weak") {
+    const opened = mark !== "lock";
+    g.setAttribute("class", "mk-lock" + (opened ? ` open ${mark}` : ""));
+    svgEl("circle", { r: 10.5 }, g);
+    svgEl("path", { d: "M-4.5 -0.5 h9 v6 h-9 z" + (opened ? " M-2.6 -0.5 v-2.8 a2.6 2.6 0 0 1 5 -1" : " M-2.6 -0.5 v-2.8 a2.6 2.6 0 0 1 5.2 0 v2.8") }, g);
+    svgEl("title", {}, g).textContent = { open: "Gate open: its required facts are in", weak: "Gate open on a placeholder answer, not a real value", lock: "Gate locked: required facts missing" }[mark];
+  }
+  return g;
+}
+
+function paintNodeTimes(s) {
+  const times = stageTimes(s);
+  const visited = new Set(s.trail.map((t) => t.stage));
+  for (const [id, n] of Object.entries(board.nodes)) {
+    const ms = times[id] ?? 0;
+    const visits = selfLoop(id) ? s.trail.filter((t) => t.stage === id).length : 0;
+    const parts = [visits > 1 ? `×${visits}` : "", visited.has(id) && !ST(id).terminal && ms >= 1000 ? mmss(ms) : ""].filter(Boolean);
+    const text = parts.join(" · ");
+    if (n.tm.textContent !== text) n.tm.textContent = text;
+    n.lbl.setAttribute("y", text ? n.p.cy - 3 : n.p.cy + 7);
+    n.tm.setAttribute("y", n.p.cy + 19);
+  }
+}
+
+function paintBoard(s, animate) {
+  const visited = new Set(s.trail.map((t) => t.stage));
+  const cleared = new Set(s.traveled.map((e) => e.split(">")).filter(([a, b]) => a !== b && FLOW.STAGES[b] && !isExit(b)).map(([a]) => a));
+  const live = !isTerm(s);
+  for (const [id, n] of Object.entries(board.nodes)) {
+    n.g.classList.toggle("visited", visited.has(id));
+    n.g.classList.toggle("current", id === s.stage && live);
+    n.g.classList.toggle("final", id === s.stage && !live);
+    const mark = markFor(s, id, visited, cleared);
+    if (mark !== n.mark) { n.markEl?.remove(); n.markEl = mark ? drawMark(n, mark) : null; n.mark = mark; }
+  }
+  paintNodeTimes(s);
+  for (const id of new Set(s.traveled)) lightEdge(id);
+  paintEndChip(s);
+  const lastId = s.traveled[s.traveled.length - 1];
+  const rest = restPoint(s.stage);
+  const place = () => { board.token.setAttribute("transform", `translate(${rest[0]},${rest[1]})`); board.token.setAttribute("opacity", 1); };
+  if (animate && !reduceMotion() && s.trail.length === shown.trailLen + 1 && board.edges[lastId]) animateAlong(board.edges[lastId], place);
+  else if (s.trail.length !== shown.trailLen || !animate) { animId++; place(); }
+  shown.trailLen = s.trail.length;
+}
+
+/* ================= header HUD and celebrations ================= */
+function paintHud(s) {
+  const limit = FLOW.OBJECTION_LIMIT, lives = s?.livesLeft ?? limit;
+  const hearts = $("hearts");
+  hearts.replaceChildren();
+  // With no call the hearts are dim outlines and the numbers are dashes: nothing to report yet.
+  hearts.classList.toggle("idle", !s);
+  for (let i = 0; i < limit; i++) {
+    const broken = s && i >= lives;
+    const node = h("span", { class: "h" + (broken ? " broken" : "") + (broken && shown.lives != null && i < shown.lives ? " breaking" : ""), title: !s ? "No call selected" : broken ? "Lost: an objection after price was not overcome" : "Heart" });
+    node.append(svgFrom(ICON.heart.replace('fill="currentColor"', "")));
+    hearts.append(node);
+  }
+  shown.lives = s ? lives : null;
+  const pre = s ? s.objections.filter((o) => !o.afterPrice).length : 0;
+  $("hearts-cap").textContent = s ? `${lives}/${limit} hearts${pre ? ` · ${pre} before price` : ""}` : "Hearts";
+  $("hearts-cap").title = s ? `${plural(pre, "objection")} before price; those cost no heart` : "";
+
+  const score = s?.score ?? 0;
+  $("score").textContent = s ? score : "–";
+  if (s && score > shown.score && !reduceMotion()) {
+    const d = $("delta");
+    d.textContent = `+${score - shown.score}`;
+    d.classList.remove("go"); void d.offsetWidth; d.classList.add("go");
+  }
+  shown.score = score;
+  paintClock(s);
+}
+
+function paintClock(s) {
+  $("timer").textContent = s ? mmss(endOf(s) - s.startedAt).padStart(5, "0") : "–";
+}
+
+// Badges as an icon strip in the HUD: earned ones in gold, in the order they were won, then the
+// ones still to win. The caption counts what was earned; it names no total the server doesn't send.
+function paintBadges(s) {
+  const earned = s?.badges ?? [];
+  const list = [...earned, ...Object.keys(BADGE_ICONS).filter((b) => !earned.includes(b))];
+  $("badges").replaceChildren(...list.map((b) => {
+    const on = earned.includes(b);
+    const el = h("span", { class: (on ? "earned" : "") + (on && !shown.badges.includes(b) && !reduceMotion() ? " pop" : ""), title: on ? `${b}: earned` : `${b}: not yet` });
+    el.append(svgFrom(ICON.hex), h("i", {}, svgFrom(`<svg viewBox="0 0 24 24">${BADGE_ICONS[b] ?? BADGE_FALLBACK}</svg>`)));
+    return el;
+  }));
+  const cap = $("badges-cap");
+  cap.replaceChildren(s ? `${plural(earned.length, "badge")}` : "Badges", earned.length ? " · " : "", earned.length ? h("b", { text: earned.at(-1) }) : "");
+  cap.title = s ? (earned.length ? `Earned: ${earned.join(", ")}` : "No badges yet") : "";
+  shown.badges = [...earned];
+}
+
+// One toast at a time, inside the header over the badge strip: never over the status strip or the map.
+// Every trigger is a real state change.
+let toastTimer = 0;
+function toast(kicker, text, icon, color) {
+  if (reduceMotion()) return;
+  const box = $("toasts");
+  clearTimeout(toastTimer);
+  fill(box, h("div", { class: "toast", "--tc": color }, h("span", { class: "ti" }, svgFrom(icon)), h("div", {}, h("small", { text: kicker }), h("b", { text }))));
+  toastTimer = setTimeout(() => box.replaceChildren(), 3100);
+}
+
+function celebrate(prev, s) {
+  if (!prev || prev.callId !== s.callId) return;
+  // The event that ends the call turns the strip into the outcome banner, which already says it,
+  // and an earlier toast still on screen (say "1 of 4 left") would contradict it.
+  if (!prev.outcome && s.outcome) { clearTimeout(toastTimer); $("toasts").replaceChildren(); return; }
+  const laneOf = (x) => Math.max(-1, ...x.trail.map((t) => FLOW.LANES.findIndex((l) => l.id === ST(t.stage).lane && l.id !== "exit")));
+  const newBadge = s.badges.find((b) => !prev.badges.includes(b));
+  if (prev.livesLeft > s.livesLeft) toast("Heart lost", `${s.livesLeft} of ${FLOW.OBJECTION_LIMIT} left`, ICON.heart, "#f43f5e");
+  else if (newBadge) toast("Achievement unlocked", newBadge, ICON.hex.replace("<path", '<path fill="currentColor"'), "var(--gold)");
+  else if (laneOf(s) > laneOf(prev) && !isTerm(s)) { const lane = FLOW.LANES[laneOf(s)]; toast("Lane reached", lane.label, ICON.map, LANE_COLOR[lane.id]); }
+}
+
+/* ================= status strip ================= */
+// Main-path stages as lane-colored ticks. A side stage (such as Objection) gets a tick only once visited,
+// so a clean close never shows an unlit step.
+function seqRail(s) {
+  const visited = new Set(s.trail.map((t) => t.stage));
+  return h("div", { class: "seq", "aria-label": "Stage sequence" },
+    FLOW.LANES.filter((l) => l.id !== "exit").map((l) => {
+      const ids = ORDER.filter((id) => ST(id).lane === l.id && (MAIN.includes(id) || visited.has(id)));
+      return h("div", { class: "seq-ticks", "--c": LANE_COLOR[l.id], title: l.label },
+        ids.map((id) => h("i", { class: (MAIN.includes(id) ? "" : "side ") + (id === s.stage ? "cur" : visited.has(id) ? "on" : ""), title: ST(id).label })));
+    }));
+}
+
+const mainCount = (s) => `${stagesReached(s)} of ${MAIN.length} main-path stages`;
+
+function outcomeSub(s) {
+  const from = ST(lastLive(s)).label, limit = FLOW.OBJECTION_LIMIT;
+  // crmStatus is the status the reducer targets for this ending; the page can't see whether the sync landed.
+  const crm = s.crmStatus ? `CRM target ${s.crmStatus}` : "No CRM status target";
+  const lead = {
+    won: `Reached ${ST(s.stage).label}`,
+    lost: s.livesLeft === 0 ? `Out of hearts: ${limit} objections after price not overcome` : `Ended from ${from} with ${s.livesLeft} of ${limit} hearts left`,
+    callback: `Last live stage: ${from}`,
+    hangup: `Hung up during ${from}`,
+    dnc: `Asked not to be called, during ${from}`,
+    not_qualified: `Did not qualify at ${from}`,
+    voicemail: "No live conversation", no_answer: "No live conversation",
+  }[s.outcome] ?? `Ended from ${from}`;
+  return [lead, crm, mainCount(s)].join("  ·  ");
+}
+
+function paintStatus(s) {
+  const el = $("status");
+  if (!s) {
+    el.className = ""; el.style.removeProperty("--c");
+    const waiting = currentId && !follow;
+    fill(el, h("div", { class: "now" }, h("div", { class: "now-k", text: "Standing by" }), h("div", { class: "now-name", text: waiting ? "Waiting for call" : "No call yet" })),
+      h("div", { class: "now-goal", text: waiting ? `Pinned to call ${currentId}. It shows here as soon as its first event arrives.` : "Start a call or a replay; this screen follows the newest call automatically." }));
+    return;
+  }
+  if (s.outcome) {
+    const cls = s.outcome === "won" ? "won" : BAD_END.has(s.outcome) ? "lost" : "neutral";
+    const c = cls === "won" ? "var(--good)" : cls === "lost" ? "var(--bad)" : "var(--exit)";
+    // The enter animation runs once, when the strip turns from a live stage into the banner.
+    el.className = `end ${cls} enter`;
+    el.style.setProperty("--c", c);
+    const icon = cls === "won" ? ICON.check : cls === "lost" ? ICON.x : s.outcome === "callback" ? ICON.clock : ICON.phone;
+    const cs = caseStrength(s);
+    const post = s.objections.filter((o) => o.afterPrice);
+    const all = Object.keys(FLOW.FACTS);
+    const real = all.filter((k) => factState(s.facts, k) === "ok").length, ph = all.filter((k) => factState(s.facts, k) === "unk").length;
+    const stat = (v, l, t) => h("div", { class: "stat", title: t }, h("b", { text: v }), h("small", { text: l }));
+    const sub = outcomeSub(s);
+    fill(el,
+      h("div", { class: "out-icon" }, svgFrom(icon)),
+      h("div", { class: "out-main" }, h("div", { class: "out-title", text: OUTCOME_TITLE[s.outcome] ?? cap(human(s.outcome)) }),
+        h("div", { class: "out-sub", text: sub, title: `${sub}\nCRM target is the status the flow sets for this ending; this page doesn't see whether the CRM sync succeeded.` })),
+      h("div", { class: "stats" },
+        stat(mmss(endOf(s) - s.startedAt), "Duration"),
+        stat(String(s.score), "Score"),
+        stat(`${s.livesLeft}/${FLOW.OBJECTION_LIMIT}`, "Hearts"),
+        stat(`${cs.n}/${cs.total}`, "Case", `${cs.tier.word}: needs facts with a real answer`),
+        stat(post.length ? `${post.filter((o) => o.resolved === true).length}/${post.length}` : "–", "Obj. overcome", post.length ? "Objections after price that were overcome" : "No objection after price, so none to overcome"),
+        stat(`${real}/${all.length}`, "Facts", `${real} real answers${ph ? ` + ${ph} placeholder${ph === 1 ? "" : "s"}` : ""} of ${all.length} facts`)),
+      seqRail(s));
+    return;
+  }
+  const st = ST(s.stage), stale = isStale(s);
+  el.className = stale ? "stale" : "";
+  el.style.setProperty("--c", stale ? "var(--warn)" : LANE_COLOR[st.lane]);
+  const lane = FLOW.LANES.find((l) => l.id === st.lane);
+  const md = moodOf(s);
+  const moodPill = md.st === "none" ? h("span", { class: "mood none", text: "not reported", title: "No stage move has carried a mood yet" })
+    : h("span", { class: `mood ${md.v}${md.st === "maybe" ? " maybe" : ""}`, text: md.st === "maybe" ? `${md.v}?` : md.v, title: md.st === "maybe" ? "Neutral is the starting value; no mood was seen since this page loaded" : "Sarah's read, set on a stage move" });
+  fill(el,
+    h("div", { class: "now" }, h("div", { class: "now-k" }, h("span", { text: stale ? "Stale?" : "Now" }), h("span", { class: "lane-tag", "--c": LANE_COLOR[st.lane], text: lane?.label ?? "" })), h("div", { class: "now-name", text: st.label })),
+    h("div", { class: "now-goal" }, h("small", { text: "Stage goal" }), h("div", { class: "goal", text: st.goal ?? "", title: st.goal ?? "" }), whyLine(s)),
+    stale ? h("div", { class: "st-stat", title: "No event for this long. The call may have dropped without call_ended." }, h("b", { class: "stale", text: ago(Date.now() - lastActivity(s)) }), h("small", { text: "No events" }))
+      : h("div", { class: "st-stat" }, h("b", { id: "in-stage", text: mmss(endOf(s) - s.trail.at(-1).at) }), h("small", { text: "In stage" })),
+    h("div", { class: "st-stat" }, moodPill, h("small", { text: "Sarah's read" })),
+    seqRail(s));
+}
+
+// The prospect's why, pinned in the strip: the first of pain, why now and protecting with a real value.
+// Quoted only when the words appear in a prospect line; otherwise shown as Sarah's note.
+function whyLine(s) {
+  const k = WORD_KEYS.map(([key]) => key).find((key) => factState(s.facts, key) === "ok");
+  if (!k) {
+    if (!s.trail.some((t) => CASE_STAGES.includes(t.stage))) return null;
+    return h("div", { class: "why-line miss-why" }, h("span", { class: "wk", text: "Their why" }), h("span", { class: "nt", text: "not captured yet" }));
+  }
+  const v = String(s.facts[k]), said = saidAt(s, k);
+  const label = WORD_KEYS.find(([key]) => key === k)[1];
+  return h("div", { class: "why-line", title: `${label}: ${v}` }, h("span", { class: "wk", text: label === "The pain" ? "Their why" : label }),
+    said ? h("q", { text: v }) : h("span", { class: "nt", text: v }), sourceTag(s, k));
+}
+
+/* ================= left column: what to do now ================= */
+// Long values sit on their own line under the label instead of being cut off at 1366.
+function checkRow(s, k) {
+  const st = reqState(s, k);
+  const v = k === "quote" ? (s.quote ? `${s.quote.options.length} options` : "missing")
+    : st === "ok" ? String(s.facts[k]) : st === "unk" ? `saved as “${s.facts[k]}”: passes the gate, no real value` : "missing";
+  return h("div", { class: `chk ${st}` + (st === "unk" || v.length > 24 ? " wide" : "") }, h("span", { class: "box" }), h("span", { text: reqLabel(k) }), h("span", { class: "v", text: v, title: v }));
+}
+
+function gateBlock(s, gate, ended) {
+  const todo = gate.reqs.filter((k) => reqState(s, k) === "todo").length;
+  const unk = gate.reqs.filter((k) => reqState(s, k) === "unk").length;
+  const where = gate.steps === 1 ? "next" : `${gate.steps} ahead`;
+  const status = todo ? `${todo} missing` : `open · ${unk} placeholder${unk === 1 ? "" : "s"}`;
+  const head = ended ? (todo ? "Still missing for " : "Gate ") : todo ? "Unlock " : "Gate ";
+  return h("div", { class: "nba-gate" },
+    h("div", { class: "nba-gate-h" }, h("span", {}, head, h("b", { text: ST(gate.id).label })), h("span", { text: ended ? status : `${status} · ${where}` })),
+    gate.reqs.map((k) => checkRow(s, k)));
+}
+
+function pathRow(s, from) {
+  const stops = pathAhead(from);
+  if (!stops.length) return null;
+  return h("div", { class: "path lv1" }, h("span", { class: "k", text: "Path ahead" }),
+    stops.map((id, i) => {
+      const gated = gateReqs(id).length > 0, open = gated && gateOpen(s, id);
+      const weak = open && gateReqs(id).some((k) => reqState(s, k) === "unk");
+      return [i ? h("span", { class: "ar", text: "›" }) : null,
+        h("span", { class: "stop" + (gated ? (weak ? " weak" : open ? " unlocked" : " locked") : ""), title: gated ? `Gate: ${gateReqs(id).map(reqLabel).join(", ")}${weak ? " (open on a placeholder)" : ""}` : "" }, gated ? svgFrom(open ? ICON.unlock : ICON.lock) : null, ST(id).label)];
+    }));
+}
+
+function paintNba(s) {
+  const box = $("nba"), meta = $("nba-meta");
+  if (!s) { meta.textContent = ""; fill(box, empty("No call selected.")); return; }
+  if (isTerm(s)) {
+    meta.textContent = "call over";
+    const won = ST(s.stage);
+    if (s.outcome === "won") {
+      fill(box, h("div", { class: "nba-goal", text: `${won.label} facts collected.` }),
+        h("div", { class: "nba-gate" }, h("div", { class: "nba-gate-h" }, h("span", {}, "Collected for ", h("b", { text: won.label }))), gateReqs(s.stage).map((k) => checkRow(s, k))),
+        has(s.facts, "address") ? h("div", { class: "lv1" }, checkRow(s, "address")) : null);
+      return;
+    }
+    const from = lastLive(s);
+    const last = from === "dialing" ? "Never got past Dialing." : `Last live stage: ${ST(from).label}.`;
+    // Lost, DNC and not-qualified calls get no "unlock" checklist: there's no next stage to unlock.
+    if (["lost", "dnc", "not_qualified"].includes(s.outcome)) {
+      fill(box, h("div", { class: "nba-goal" }, `${OUTCOME_TITLE[s.outcome]}. `, h("span", { class: "soft", text: s.outcome === "dnc" ? `${last} No follow-up call.` : last })));
+      return;
+    }
+    const gate = nextGate(s, from);
+    fill(box,
+      h("div", { class: "nba-goal" }, `${OUTCOME_TITLE[s.outcome] ?? cap(human(s.outcome))}. `, h("span", { class: "soft", text: last })),
+      gate ? gateBlock(s, gate, true) : h("div", { class: "nba-gate" }, h("div", { class: "nba-gate-h" }, h("span", { text: "Every gate ahead was already clear." }))));
+    return;
+  }
+  meta.textContent = "";
+  const st = ST(s.stage);
+  const open = openObjection(s);
+  const kids = [];
+  if (open) kids.push(h("div", { class: "nba-alert" }, h("span", { class: "ic", text: "!" }),
+    h("div", {}, h("b", { text: `First, overcome: ${cap(human(open.kind))}` }),
+      h("small", { text: `After price, at ${mmss(open.at - s.startedAt)}. Not overcome costs a heart.` }))));
+  // The stage goal is also in the status strip, so the compact form leads with the gate checklist.
+  kids.push(h("div", { class: "nba-goal lv1", text: st.goal ?? st.label }));
+  if (selfLoop(s.stage) && s.objections.length) {
+    const last = s.objections.at(-1), os = objStatus(last);
+    kids.push(h("div", { class: "nba-ctx lv1" }, "Latest objection: ", h("b", { text: cap(human(last.kind)) }), " · ", h("span", { style: `color:${os.k};font-weight:700`, text: os.s })));
+  }
+  const gate = nextGate(s, s.stage);
+  kids.push(gate ? gateBlock(s, gate) : h("div", { class: "nba-gate" }, h("div", { class: "nba-gate-h" }, h("span", { text: "Every gate ahead is already clear." }))));
+  kids.push(pathRow(s, s.stage));
+  fill(box, ...kids);
+}
+
+function paintRules(s) {
+  const box = $("rules"), meta = $("rules-meta");
+  if (!s) { fill(box, empty("Rules run once a call starts.")); meta.textContent = "rules"; meta.style.cssText = ""; return; }
+  const rank = { alert: 0, flag: 1, nc: 2 };
+  const rs = rules(s).map((r, i) => ({ ...r, i })).sort((a, b) => (rank[a.st] ?? 3) - (rank[b.st] ?? 3) || a.i - b.i);
+  const hotOf = (r) => r.st === "alert" || r.st === "flag";
+  const active = rs.filter(hotOf).length, passed = rs.filter((r) => r.st === "pass").length;
+  const unchecked = rs.length - active - passed;
+  // Green "all clear" only when every rule ran and passed; nothing applied reads neutral, not as a pass.
+  const tone = active ? "warn" : passed === rs.length ? "good" : null;
+  meta.textContent = active ? `${active} active · ${passed}/${rs.length} pass`
+    : passed === rs.length ? `all clear · ${passed}/${rs.length} pass`
+    : passed ? `${passed}/${rs.length} pass · ${unchecked} unchecked` : `${rs.length} not checked`;
+  meta.style.color = tone ? `var(--${tone})` : "";
+  meta.style.borderColor = tone ? `color-mix(in srgb, var(--${tone}) 45%, transparent)` : "";
+  meta.title = "Rules are fixed thresholds over the call state, not judgments";
+  const tag = { wait: "not yet", na: "n/a", nc: "can't check" };
+  const rows = rs.map((r) => {
+    const hot = hotOf(r) || r.st === "nc";
+    return h("div", { class: `rule ${r.st}` + (hot ? "" : " lv2"), title: r.detail ?? "" },
+      h("span", { class: "ic", text: r.st === "pass" ? "✓" : hotOf(r) ? "!" : r.st === "nc" ? "?" : "" }),
+      h("div", {}, hot ? [h("b", { text: r.label }), r.detail ? h("small", { class: "lv1", text: r.detail }) : null] : r.label),
+      h("span", { class: "tg", text: tag[r.st] ?? "" }));
+  });
+  // Compact forms: the rules that need attention (level 0 without their details), then one line
+  // counting the rest. Level 2 lists every rule.
+  const quiet = rs.filter((r) => !hotOf(r) && r.st !== "nc");
+  const count = (st) => quiet.filter((r) => r.st === st).length;
+  const sum = quiet.length ? h("div", { class: "rules-sum max1" },
+    count("pass") ? h("span", {}, h("b", { text: `✓ ${count("pass")} passed` })) : null,
+    count("wait") ? h("span", { text: `${count("wait")} not yet` }) : null,
+    count("na") ? h("span", { text: `${count("na")} n/a` }) : null) : null;
+  fill(box, ...rows, sum);
+}
+
+/* ================= center: transcript ================= */
+function paintTalk(s) {
+  const box = $("talk");
+  if (!s || !s.transcript.length) { box.replaceChildren(); return; }
+  const t = talk(s);
+  const name = s.lead?.name ?? s.facts.first_name ?? "Prospect";
+  // Below the rule's minimum a percentage would read as a verdict; show the raw counts instead.
+  if (t.total < RULE.talkMinWords) {
+    fill(box, h("span", { class: "few", title: `The ratio shows once the recent transcript has ${RULE.talkMinWords}+ words` },
+      h("span", { class: "bt", text: `Sarah ${plural(t.bot, "word")}` }), " · ", h("span", { style: "color:var(--pro)", text: `${name} ${plural(t.pro, "word")}` }), ` · ratio after ${RULE.talkMinWords}+ words`));
+    return;
+  }
+  const over = t.botPct > RULE.talkPct;
+  fill(box,
+    h("span", { class: "bt" }, "Sarah ", h("b", { text: t.total ? `${t.botPct}%` : "–", style: over ? "color:var(--warn)" : "" })),
+    h("div", { class: "ratio", title: `${t.bot} words Sarah, ${t.pro} words ${name}, last ${t.lines} lines. The mark is the ${RULE.talkPct}% rule.` },
+      h("div", { class: "a", style: `width:${t.botPct}%` }), h("div", { class: "b", style: `width:${t.total ? 100 - t.botPct : 0}%` }),
+      h("span", { class: "ratio-mark", style: `left:${RULE.talkPct}%`, "data-l": `${RULE.talkPct}%` })),
+    h("span", { class: "pr" }, h("b", { text: t.total ? `${100 - t.botPct}%` : "–" }), ` ${name}`),
+    h("span", { class: "meta", style: "color:var(--muted)", text: `· recent ${t.lines} lines` }));
+}
+
+function paintTranscript(s) {
+  paintTalk(s);
+  const box = $("transcript");
+  if (!s || !s.transcript.length) { fill(box, empty(s ? "No lines yet." : "No call selected.")); shown.trId = s?.callId ?? null; return; }
+  const near = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  const name = String(s.lead?.name ?? s.facts.first_name ?? "Prospect");
+  const needles = factNeedles(s);
+  const tagged = new Set();
+  const rows = s.transcript.map((l, i) => {
+    const bot = l.speaker === "bot";
+    const hl = bot ? { nodes: [l.text], keys: [] } : highlight(l.text, needles);
+    const tags = hl.keys.filter((n) => !tagged.has(n.key) && tagged.add(n.key));
+    return h("div", { class: `ln ${l.speaker}` + (i === s.transcript.length - 1 ? " last" : "") },
+      h("div", { class: "who" }, h("span", { class: "av", text: bot ? "S" : name.charAt(0).toUpperCase() }),
+        h("div", { class: "wt" }, h("b", { text: bot ? "Sarah" : name, title: bot ? "Sarah" : name }), h("time", { text: mmss(l.at - s.startedAt) }))),
+      h("p", {}, hl.nodes, tags.map((n) => h("span", { class: "ftag" + (n.needs ? " needs" : ""), text: n.label }))));
+  });
+  fill(box, ...rows);
+  if (near || shown.trId !== s.callId) box.scrollTop = box.scrollHeight;
+  shown.trId = s.callId;
+}
+
+/* ================= right column: the case and the money ================= */
+// Where a saved value came from: a prospect line that holds it word for word, or Sarah's own note.
+// Nothing is claimed when there's no transcript, or when older lines may have rolled off.
+function sourceTag(s, k) {
+  if (isUnknown(s.facts[k])) return h("span", { class: "vb unk", text: `saved as “${s.facts[k]}”, no real value` });
+  const line = saidAt(s, k);
+  if (line) return h("span", { class: "vb said", text: `✓ said at ${mmss(line.at - s.startedAt)}`, title: line.remembered ? "Matched while the line was in the transcript; it has since rolled off" : "Found word for word in a prospect line" });
+  if (!s.transcript.length) return h("span", { class: "vb note", text: "no transcript to check" });
+  if (transcriptTrimmed(s)) return h("span", { class: "vb note", text: `can't check: transcript now starts at ${mmss(s.transcript[0].at - s.startedAt)}` });
+  return h("span", { class: "vb note", text: "Sarah's note, not verbatim" });
+}
+
+function paintWords(s) {
+  const box = $("words"), meta = $("words-meta");
+  const f = s?.facts ?? {};
+  const present = WORD_KEYS.filter(([k]) => has(f, k));
+  if (!present.length) {
+    meta.textContent = s ? "nothing saved yet" : "verbatim check";
+    fill(box, h("div", { class: "empty lv1", text: "Nothing in the prospect's own words yet. Discovery saves the pain, why now and who they're protecting, so Sarah can play them back before any price." }));
+    return;
+  }
+  const name = s.lead?.name ?? f.first_name ?? "Prospect";
+  // Header summary by source: word for word, Sarah's note, or not checkable (no transcript, or lines
+  // that rolled off before this page saw them).
+  const real = present.filter(([k]) => !isUnknown(f[k]));
+  const verbatim = real.filter(([k]) => saidAt(s, k)).length;
+  const unchecked = !s.transcript.length || transcriptTrimmed(s) ? real.length - verbatim : 0;
+  const notes = real.length - verbatim - unchecked;
+  meta.textContent = [verbatim && `${verbatim} verbatim`, notes && plural(notes, "note"), unchecked && `${unchecked} can't check`].filter(Boolean).join(" · ") || "placeholders only";
+  meta.title = "Saved pain, why now and protecting, checked word for word against the prospect's lines";
+  const [lead, ...rest] = present;
+  const leadVerb = saidAt(s, lead[0]);
+  const kids = [
+    h("div", { class: "lv1 quote" + (leadVerb ? "" : " note") }, leadVerb ? `“${f[lead[0]]}”` : String(f[lead[0]])),
+    h("div", { class: "lv1 src" }, h("span", { text: `${name} · ${lead[1]}` }), sourceTag(s, lead[0])),
+  ];
+  if (rest.length) kids.push(h("div", { class: "why lv2" }, rest.map(([k, label]) => {
+    const verb = saidAt(s, k);
+    return h("div", {}, h("div", { class: "wl", text: label }), h("div", { class: "wv" + (verb ? "" : " note"), text: verb ? `“${f[k]}”` : String(f[k]) }), h("div", { class: "src" }, sourceTag(s, k)));
+  })));
+  if (!has(f, "pain") || isUnknown(f.pain)) kids.push(h("div", { class: "miss lv1", text: has(f, "pain") ? `The pain is saved as “${f.pain}”: not in their words yet` : "The pain is not captured yet" }));
+  fill(box, ...kids);
+}
+
+function paintCase(s) {
+  const box = $("case");
+  if (!s) { fill(box, empty("No call selected.")); return; }
+  const cs = caseStrength(s);
+  const missing = cs.rows.filter((r) => r.st === "todo").map((r) => r.label);
+  const unk = cs.rows.filter((r) => r.st === "unk");
+  const confirmed = reqState(s, "case_confirmed");
+  $("case-meta").textContent = "1 pt per real answer";
+  $("case-meta").title = cs.tier.legend;
+  const kids = [
+    h("div", { class: "case-top", "--tc": cs.tier.c },
+      h("div", { class: "case-n" }, String(cs.n), h("small", { text: `/${cs.total}` })),
+      h("span", { class: "tier", text: cs.tier.word, title: cs.tier.legend }),
+      h("div", { class: "confirm" }, "Case confirmed", h("b", { class: confirmed === "ok" ? "ok" : "", text: confirmed === "ok" ? "by prospect" : confirmed === "unk" ? "placeholder" : "not yet" }))),
+    h("div", { class: "meter", "--tc": cs.tier.c, style: `grid-template-columns:repeat(${cs.total},1fr)` },
+      cs.rows.map((r) => h("i", { class: r.st === "ok" ? "ok" : r.st === "unk" ? "unk" : "", title: `${r.label}: ${r.st === "todo" ? "not captured" : r.v}${r.st === "unk" ? " (placeholder, scores 0)" : ""}` }))),
+    h("div", { class: "gaps lv2" },
+      missing.length ? h("div", {}, "Gaps: ", h("b", { text: missing.join(", ") }))
+        : h("div", { text: unk.length ? `No missing facts; ${plural(unk.length, "placeholder")}.` : "No gaps: every needs fact has a real answer." }),
+      unk.length ? h("div", { class: "u" }, "Placeholder: ", h("b", { text: unk.map((r) => `${r.label} “${r.v}”`).join(", ") }), " passes the gate, no real value") : null),
+    h("div", { class: "legend lv3", text: cs.tier.legend }),
+  ];
+  const d = discipline(s), echo = recapEcho(s), cp = caseAtPrice(s);
+  const recap = d.quoteAt == null
+    ? (d.recapAt ? ["ok", `${span(d.recapMs)} in ${ST("case_recap").label} · quote next`] : ["info", "not reached yet"])
+    : d.recapAt != null && d.recapAt <= d.quoteAt ? ["ok", `${span(d.recapMs)} in ${ST("case_recap").label}`] : ["bad", "quoted before any recap"];
+  const conf = confirmed === "ok" ? ["ok", String(s.facts.case_confirmed)] : confirmed === "unk" ? ["unk", `“${s.facts.case_confirmed}”`] : ["info", "not yet"];
+  const atPrice = cp.st === "none" ? ["info", "price not shown yet"]
+    : cp.st === "unseen" ? ["info", `not seen: page loaded after price (now ${cp.now.n}/${cp.now.total})`]
+    : [cp.then.n < cp.thin ? "bad" : "ok", `${cp.then.n}/${cp.then.total} ${cp.then.tier.word}${cp.later.length ? ` · ${cp.later.length} filled after price` : ""}`];
+  const row = (st, label, v) => h("div", { class: `chk ${st}` }, h("span", { class: "box" }), h("span", { text: label }), h("span", { class: "v", title: v, text: v }));
+  // Long values sit on their own line under the label so nothing truncates at 1366.
+  const wide = (st, label, v, extra) => h("div", { class: `chk wide ${st}` }, h("span", { class: "box" }), h("span", { text: label }), h("span", { class: "v" }, extra ?? null, v));
+  const caseNames = CASE_STAGES.filter((id) => FLOW.STAGES[id]).map((id) => ST(id).label);
+  const named = caseNames.length > 1 ? `${caseNames.slice(0, -1).join(", ")} and ${caseNames.at(-1)}` : caseNames.join("");
+  kids.push(h("div", { class: "disc lv1" }, h("div", { class: "disc-h", text: "Discipline · from the stage trail" }),
+    row(recap[0], "Recap before quote", recap[1]),
+    row(conf[0], "Prospect confirmed", conf[1]),
+    row(atPrice[0], "Case when price shown", atPrice[1]),
+    wide("metric", d.priceAt ? "Case building before price" : "Case building so far", `${span(d.caseMs)} in ${named} · ${d.share}% of ${d.priceAt ? "pre-price" : "call"} time`, h("span", { class: "share" }, h("i", { style: `width:${d.share}%` }))),
+    wide(echo.st, "Recap echoed their words", echo.v)));
+  fill(box, ...kids);
+}
+
+function chosenIndex(s) {
+  if (!has(s.facts, "chosen_option") || !s.quote) return -1;
+  const txt = String(s.facts.chosen_option).replace(/,/g, "");
+  let i = s.quote.options.findIndex((o) => txt.includes(Number(o.monthly).toFixed(2)));
+  if (i < 0) i = s.quote.options.findIndex((o) => new RegExp(`\\b${o.face}\\b`).test(txt));
+  return i;
+}
+
+// Before a quote exists, the ladder is a gate: the requires of the quote stage and the price stage.
+function priceGateReqs() {
+  const priceIds = Object.keys(FLOW.STAGES).filter((id) => (ST(id).requires ?? []).includes("quote"));
+  const quoteIds = Object.keys(FLOW.STAGES).filter((id) => priceIds.some((p) => (ST(id).next ?? []).includes(p)));
+  return [...new Set([...quoteIds, ...priceIds].flatMap((id) => ST(id).requires ?? []))];
+}
+
+function paintLadder(s) {
+  const box = $("ladder");
+  if (!s?.quote) {
+    const reqs = priceGateReqs();
+    const open = s && reqs.every((k) => reqState(s, k) !== "todo");
+    const got = s ? reqs.filter((k) => reqState(s, k) === "ok").length : 0;
+    $("lad-meta").textContent = s ? `locked · ${got}/${reqs.length} gate facts` : "locked";
+    fill(box, h("div", { class: "locked lv1" },
+      h("div", { class: "lk" + (open ? " open" : "") }, svgFrom(open ? ICON.unlock : ICON.lock)),
+      h("div", {}, h("b", { text: "Prices locked" }), h("span", { text: "No price before the case is recapped and confirmed." }), s ? reqs.map((k) => checkRow(s, k)) : null)));
+    return;
+  }
+  const opts = s.quote.options.map((o, i) => ({ ...o, i })).sort((a, b) => a.face - b.face);
+  const max = Math.max(...opts.map((o) => o.monthly));
+  const top = opts.find((o) => o.monthly === max);
+  const ci = chosenIndex(s);
+  const carriers = [...new Set(opts.map((o) => `${o.carrier} ${o.product}`))];
+  const chosen = opts.find((o) => o.i === ci);
+  $("lad-meta").textContent = `${plural(opts.length, "option")} · ${chosen ? `chose ${money(chosen.face)}` : s.pricePresented ? "presented" : "not presented yet"}`;
+  $("lad-meta").title = `Tier ${String(s.quote.tier).toLowerCase()}`;
+  const barTitle = `Bar length: monthly premium vs the highest option ($${Number(max).toFixed(2)}${top ? `, ${money(top.face)}` : ""})`;
+  fill(box,
+    h("div", { class: "lad-h lv1" }, h("b", { text: carriers.join(" / ") }), h("span", { text: "bar = monthly", title: barTitle })),
+    ...opts.map((o) => h("div", { class: "rung lv1" + (o.i === ci ? " chosen" : "") },
+      h("span", { class: "face", text: money(o.face) }),
+      h("span", { class: "bar", title: barTitle }, h("i", { style: `width:${(o.monthly / max) * 100}%` })),
+      h("span", { class: "m" }, `$${Number(o.monthly).toFixed(2)}`, h("small", { text: "/mo" })))),
+    has(s.facts, "chosen_option") && ci < 0 ? h("div", { class: "empty lv1", style: "margin-top:.3rem", text: `Chosen: ${s.facts.chosen_option}` }) : null);
+}
+
+function paintTimeline(s) {
+  const box = $("timeline");
+  if (!s) { fill(box, empty("No call selected.")); $("tl-meta").textContent = ""; return; }
+  const post = s.objections.filter((o) => o.afterPrice).length;
+  const openNow = openObjection(s) && !isTerm(s);
+  // The header is the card's compact form: objections first, the stage count when there are none.
+  $("tl-meta").textContent = s.objections.length ? `${plural(s.objections.length, "objection")} · ${openNow ? "1 open" : `${post} after price`}` : `${stagesReached(s)}/${MAIN.length} main stages`;
+  $("tl-meta").title = `${mainCount(s)} reached · ${plural(s.objections.length, "objection")}, ${post} after price`;
+  const start = s.startedAt, end = endOf(s), dur = Math.max(1, end - start);
+  const pct = (at) => `${Math.min(100, Math.max(0, ((at - start) / dur) * 100))}%`;
+  const segs = s.trail.map((t, i) => {
+    const to = s.trail[i + 1]?.at ?? end;
+    const st = ST(t.stage);
+    return h("div", { class: "seg" + (i === s.trail.length - 1 && !isTerm(s) ? " cur" : ""), "--c": BAD_END.has(t.stage) ? "var(--bad)" : LANE_COLOR[st.lane], style: `width:${((to - t.at) / dur) * 100}%`, title: `${st.label} · ${mmss(to - t.at)}` });
+  });
+  const priceAt = firstAt(s, "price");
+  const objTrack = h("div", { class: "track obj" },
+    s.objections.map((o) => { const st = objStatus(o); return h("i", { class: "om" + (o.afterPrice ? " post" : ""), "--k": st.k, style: `left:${pct(o.at)}`, title: `${cap(human(o.kind))} · ${st.s} · ${o.afterPrice ? "after price" : "before price, no heart"} · ${mmss(o.at - start)}` }); }));
+  const exitO = exitObjection(s);
+  // Each row: kind, status from o.resolved, time. Before price the reducer never settles an objection,
+  // so an unsettled one there is tagged "before price" (no heart at stake), not given a verdict.
+  const list = s.objections.length
+    ? h("div", { class: "ol lv1" }, s.objections.map((o) => {
+      const st = objStatus(o);
+      return h("div", { class: "oi" + (o.afterPrice ? " post" : ""), "--k": st.k, title: `${cap(human(o.kind))} · ${o.afterPrice ? "after price" : "before price, no heart at stake"} · ${st.s}` },
+        h("i"), h("span", { class: "k", text: cap(human(o.kind)) }), h("span", { class: "s", text: st.s }), h("span", { class: "at", text: mmss(o.at - start) }),
+        o === exitO ? h("span", { class: "pre" }, "Last before the exit: ", h("em", { text: ST(s.stage).label })) : null);
+    }))
+    : h("div", { class: "empty lv1", style: "margin-top:.3rem", text: "No objections yet. Before price they cost no heart; after price each one not overcome costs a heart." });
+  fill(box, h("div", { class: "tl lv2" },
+    priceAt ? h("div", { class: "tl-over" }, h("div", { class: "price-line" + ((priceAt - start) / dur > 0.6 ? " flip" : ""), style: `left:${pct(priceAt)}` }, h("span", { text: "PRICE SHOWN" }))) : null,
+    h("div", { class: "tl-row" }, h("span", { text: `Stages ${stagesReached(s)}/${MAIN.length}`, title: `${mainCount(s)} reached` }), h("div", { class: "track" }, segs)),
+    h("div", { class: "tl-row" }, h("span", { text: "Objections" }), objTrack)),
+    s.objections.length ? h("div", { class: "tl-legend lv2" }, h("span", {}, h("i"), "before price · no heart"), h("span", {}, h("i", { class: "f" }), "after price")) : null,
+    list);
+}
+
+function paintFile(s) {
+  const box = $("facts");
+  const facts = s?.facts ?? {};
+  const groups = {};
+  for (const [key, f] of Object.entries(FLOW.FACTS)) (groups[f.group] ??= []).push([key, f]);
+  // Counts are real answers only; a placeholder is counted separately, never as captured.
+  let real = 0, ph = 0, all = 0;
+  const stats = Object.entries(groups).map(([g, items]) => {
+    const ok = items.filter(([k]) => factState(facts, k) === "ok").length, unk = items.filter(([k]) => factState(facts, k) === "unk").length;
+    real += ok; ph += unk; all += items.length;
+    return { g, items, ok, unk, full: ok === items.length };
+  });
+  const countTx = (x) => [`${x.ok}/${x.items.length}`, x.unk ? h("span", { class: "ph", text: ` +${x.unk}?`, title: `${x.unk} placeholder${x.unk === 1 ? "" : "s"}` }) : null];
+  const chip = ([k, f]) => has(facts, k)
+    ? h("span", { class: "f on" + (isUnknown(facts[k]) ? " unk" : ""), title: `${f.label}: ${facts[k]}${isUnknown(facts[k]) ? " (placeholder)" : ""}` }, `${f.label} `, h("b", { text: String(facts[k]) }))
+    : h("span", { class: "f", text: f.label });
+  const needs = stats.find((x) => x.g === "needs");
+  fill(box,
+    h("div", { class: "fcount max1" }, stats.map((x) => h("span", { class: x.full ? "full" : "" }, cap(x.g), h("b", {}, countTx(x))))),
+    needs ? h("div", { class: "fneeds fx lv1 max1" }, needs.items.map(chip)) : null,
+    ...stats.map((x) => h("div", { class: "fg lv2" },
+      h("h3", {}, x.g, h("span", { class: x.full ? "full" : "" }, countTx(x))),
+      h("div", { class: "fx" }, x.items.map(chip)))));
+  $("facts-meta").textContent = s ? `${real}/${all} real${ph ? ` +${ph}?` : ""}` : "";
+  $("facts-meta").title = s ? `${real} real answers${ph ? ` and ${plural(ph, "placeholder")} (saved, but no real value)` : ""} of ${all} facts` : "";
+}
+
+// Cards follow the call phase: the one that matters sits first, and it is the first to be given room.
+function cardOrder(s) {
+  if (!s) return ["words-card", "case-card", "ladder-card", "timeline-card"];
+  const late = s.quote != null || ["present", "close"].includes(ST(s.stage).lane);
+  if (isTerm(s)) return s.outcome === "won" ? ["ladder-card", "case-card", "timeline-card", "words-card"]
+    : s.outcome === "lost" ? ["timeline-card", "case-card", "ladder-card", "words-card"]
+    : s.objections.length ? ["case-card", "timeline-card", "words-card", "ladder-card"]
+    : ["case-card", "words-card", "timeline-card", "ladder-card"];
+  if (openObjection(s)) return ["timeline-card", "ladder-card", "case-card", "words-card"];
+  if (late) return ["ladder-card", "case-card", "timeline-card", "words-card"];
+  return ["words-card", "case-card", "ladder-card", "timeline-card"];
+}
+
+// Highest fit level per card (see the .lv classes): 0 is the compact form every card can always take.
+const MAX_LEVEL = { "nba-card": 1, "rules-card": 2, "file-card": 2, "words-card": 2, "case-card": 3, "ladder-card": 1, "timeline-card": 2 };
+// Left column upgrade order: what to do now, then every rule, then the prospect file.
+const LEFT_STEPS = [["nba-card", 1], ["rules-card", 1], ["rules-card", 2], ["file-card", 1], ["file-card", 2]];
+// Right column: one level at a time, round by round in phase order, so every card shows its
+// essentials before any card shows its extras.
+const roundRobin = (ids) => Array.from({ length: Math.max(...ids.map((id) => MAX_LEVEL[id])) }, (_, i) => ids.filter((id) => MAX_LEVEL[id] > i).map((id) => [id, i + 1])).flat();
+
+// On a wallboard nobody scrolls. Start every side card compact, then raise levels step by step while
+// the column still fits; a card that doesn't fit at a level stays below it. Only the transcript scrolls.
+function fitColumns(s) {
+  const order = cardOrder(s);
+  order.forEach((id, i) => { $(id).style.order = i; });
+  const stacked = matchMedia("(max-width: 1100px)").matches;
+  for (const [col, steps] of [[$("left"), LEFT_STEPS], [$("right"), roundRobin(order)]]) {
+    const ids = [...new Set(steps.map(([id]) => id))];
+    for (const id of ids) $(id).dataset.level = stacked ? MAX_LEVEL[id] : 0;
+    if (stacked) continue;
+    const fits = () => col.scrollHeight <= col.clientHeight + 1;
+    const stuck = new Set();
+    for (const [id, l] of steps) {
+      if (stuck.has(id)) continue;
+      $(id).dataset.level = l;
+      if (!fits()) { $(id).dataset.level = l - 1; stuck.add(id); }
+    }
+  }
+}
+
+/* ================= orchestration ================= */
+function paintAll(s, animate) {
+  if (s && shown.id !== s.callId) {
+    resetBoard();
+    shown = { id: s.callId, trailLen: 0, badges: [...s.badges], score: s.score, lives: s.livesLeft, trId: null };
+    animate = false;
+  }
+  if (!s) { resetBoard(); shown = { id: null, trailLen: 0, badges: [], score: 0, lives: null, trId: null }; }
+  shown.stale = s ? isStale(s) : false;
+  if (s) paintBoard(s, animate);
+  paintStatus(s); paintHud(s); paintNba(s); paintRules(s); paintBadges(s);
+  paintTranscript(s); paintWords(s); paintCase(s); paintLadder(s); paintTimeline(s); paintFile(s);
+  fitColumns(s);
+}
+
+// Once a second: what depends on the clock, follow hand-offs and calls going stale.
+function tick() {
+  followTick();
+  paintPicker();
+  const s = calls.get(currentId);
+  paintClock(s);
+  if (!s || isTerm(s)) return;
+  if (isStale(s) !== shown.stale) { paintAll(s, false); return; }
+  const el = $("in-stage");
+  if (el) el.textContent = mmss(endOf(s) - s.trail.at(-1).at);
+  paintNodeTimes(s); paintRules(s); paintTimeline(s); paintCase(s);
+  fitColumns(s);
+}
+
+/* ================= picker, follow, deep link, theme, stream ================= */
+const byNewest = (a, b) => b.startedAt - a.startedAt;
+const newestId = () => [...calls.values()].sort(byNewest)[0]?.callId ?? null;
+// Follow mode watches the newest call that is still live; a stale call doesn't count as live.
+const newestLive = () => [...calls.values()].sort(byNewest).find((s) => !s.outcome && !isStale(s))?.callId ?? null;
+const followTarget = () => newestLive() ?? newestId();
+
+// The followed call ended: its banner stays up for FOLLOW_HOLD_MS, then the board moves to a call
+// that is still live. With none live it stays put.
+function followTick() {
+  if (!follow) return;
+  const cur = calls.get(currentId);
+  if (cur && !cur.outcome && !isStale(cur)) return;
+  if (cur && Date.now() < holdUntil) return;
+  const target = newestLive() ?? (cur ? currentId : newestId());
+  if (target && target !== currentId) show(target, false);
+}
+
+function syncUrl() {
+  const u = new URL(location.href);
+  if (follow || !currentId) u.searchParams.delete("call"); else u.searchParams.set("call", currentId);
+  history.replaceState(null, "", u);
+}
+
+// Stage or outcome first, then the time, then the name: a long name is what gets cut, not the status.
+function pickLabel(s) {
+  const time = new Date(s.startedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const status = s.outcome ? OUTCOME_TITLE[s.outcome]?.split(" ·")[0] ?? human(s.outcome)
+    : isStale(s) ? `No events ${ago(Date.now() - lastActivity(s))} · ${ST(s.stage)?.label ?? s.stage}` : ST(s.stage)?.label ?? s.stage;
+  return `${status} · ${time} · ${s.lead?.name ?? s.callId}`;
+}
+
+let pickSig = "";
+function paintPicker() {
+  const pick = $("pick");
+  const sorted = [...calls.values()].sort(byNewest);
+  const opts = sorted.map((s) => [s.callId, pickLabel(s)]);
+  if (currentId && !calls.has(currentId)) opts.unshift([currentId, `Waiting for ${currentId}`]);
+  if (!opts.length) opts.push(["", "No calls yet"]);
+  // Rebuild only when a label changed, so an open dropdown isn't reset every second.
+  const sig = JSON.stringify([opts, currentId, follow]);
+  if (sig === pickSig) return;
+  pickSig = sig;
+  pick.replaceChildren(...opts.map(([value, text]) => h("option", { value, text })));
+  pick.value = currentId ?? "";
+  $("follow").classList.toggle("on", follow);
+  $("follow").textContent = follow ? "Following live" : "Follow live";
+  $("follow").title = "Follows the newest live call. When it ends, its banner stays up a few seconds before moving on.";
+}
+
+function show(id, animate) {
+  currentId = id;
+  holdUntil = 0;
+  paintPicker();
+  syncUrl();
+  paintAll(calls.get(id) ?? null, animate);
+}
+
+$("pick").addEventListener("change", (e) => { follow = e.target.value === followTarget(); show(e.target.value, false); });
+$("follow").addEventListener("click", () => {
+  follow = !follow;
+  if (follow) show(followTarget(), false); else { paintPicker(); syncUrl(); }
+});
+
+function applyTheme(t) {
+  if (t !== "light" && t !== "dark") return;
+  document.documentElement.dataset.theme = t;
+  $("theme").replaceChildren(svgFrom(t === "dark" ? ICON.sun : ICON.moon));
+}
+applyTheme("dark");
+try { applyTheme(localStorage.getItem("mc-theme")); } catch {}
+applyTheme(params.get("theme"));
+$("theme").addEventListener("click", () => {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  applyTheme(next);
+  try { localStorage.setItem("mc-theme", next); } catch {}
+});
+
+function connect() {
+  const es = new EventSource("/stream");
+  es.onopen = () => $("live").classList.add("on");
+  es.onerror = () => $("live").classList.remove("on");
+  es.onmessage = (m) => {
+    const data = JSON.parse(m.data);
+    if (data.snapshot) {
+      // The snapshot is the server's whole set: calls it no longer has are dropped. Anything that
+      // changed while the stream was down was not seen live, so those per-call observations reset.
+      const ids = new Set(data.snapshot.map((s) => s.callId));
+      for (const id of [...calls.keys()]) if (!ids.has(id)) calls.delete(id);
+      for (const s of data.snapshot) {
+        const old = calls.get(s.callId), w = seen.get(s.callId);
+        if (w && (!old || old.transcript.length !== s.transcript.length || old.transcript.at(-1)?.at !== s.transcript.at(-1)?.at)) w.lines = null;
+        if (w && w.mood === false && (!old || old.trail.length !== s.trail.length)) w.mood = null;
+        calls.set(s.callId, s);
+      }
+      pickSig = "";
+      show(follow ? followTarget() : currentId, false);
+      return;
+    }
+    const prev = calls.get(data.callId);
+    calls.set(data.callId, data.state);
+    observe(prev, data.state, data.event);
+    if (!prev && follow) { show(data.callId, false); return; }
+    if (data.callId === currentId) {
+      if (prev && !prev.outcome && data.state.outcome) holdUntil = Date.now() + FOLLOW_HOLD_MS;
+      paintPicker();
+      if (!prev) paintAll(data.state, false);
+      else { celebrate(prev, data.state); paintAll(data.state, true); }
+    } else paintPicker();
+    followTick();
+  };
+}
+
+function refit() { fitLabels(); fitColumns(calls.get(currentId) ?? null); }
+
+(async () => {
+  FLOW = await (await fetch("/flow")).json();
+  ORDER = Object.keys(FLOW.STAGES).filter((id) => !isExit(id));
+  MAIN = [];
+  for (let id = ORDER[0]; id && !MAIN.includes(id); id = nextMain(id)) MAIN.push(id);
+  board = buildBoard(FLOW);
+  $("board").appendChild(board.svg);
+  fitLabels();
+  paintPicker();
+  paintAll(null, false);
+  setInterval(tick, 1000);
+  addEventListener("resize", () => fitColumns(calls.get(currentId) ?? null));
+  connect();
+  // Web fonts last and non-blocking, after the load event so a hanging request can't hold it either:
+  // offline or hanging, the page already runs on the system font stack.
+  const addFont = () => {
+    const font = h("link", { rel: "stylesheet", href: FONT_CSS });
+    font.addEventListener("load", () => document.fonts?.ready.then(refit).catch(() => {}));
+    document.head.append(font);
+  };
+  if (document.readyState === "complete") addFont(); else addEventListener("load", addFont, { once: true });
+  document.fonts?.addEventListener?.("loadingdone", refit);
+})();
+</script>
+</body>
+</html>
