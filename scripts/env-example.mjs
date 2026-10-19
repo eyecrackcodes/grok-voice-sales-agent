@@ -11,6 +11,7 @@ const ENV_ONLY = [
   ["SETTINGS_FILE", "Where the Settings page saves its values (default data/settings.json).", ""],
   ["CALL_LOG_DIR", "Set to off to stop writing call event logs to data/calls.", ""],
   ["CRM_DATA_DIR", "Where the none CRM keeps leads.csv and outcomes.jsonl (default data/).", ""],
+  ["TWILIO_SIGNATURE_CHECK", "Set to off only while troubleshooting: skips the Twilio signature check on inbound webhooks. Never on the Settings page.", "on"],
   ["GRADER_RUBRIC_FILE", "Optional JSON file with extra grader rubric items; see scripts/grade-call.mjs.", ""],
 ];
 

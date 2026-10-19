@@ -104,7 +104,6 @@ export const SETTINGS = [
   { key: "VOICE_MODEL", group: "advanced", label: "Voice model", type: "text", default: "grok-voice-3.0" },
   { key: "PRACTICE_MAX_ACTIVE", group: "advanced", label: "Practice calls at once", type: "number", default: 2, min: 1, max: 5, help: "Each practice call spends real xAI credit." },
   { key: "RATE_TABLE", group: "advanced", label: "Rate table file", type: "text", default: "src/rates/sample-level-plan.json", help: "The shipped table is SAMPLE DATA, not real rates. Schema in the README." },
-  { key: "TWILIO_SIGNATURE_CHECK", group: "advanced", label: "Check Twilio signatures", type: "select", default: "on", options: [{ value: "on", label: "On" }, { value: "off", label: "Off (troubleshooting only)" }] },
   { key: "TWILIO_STREAM_SIGNATURE", group: "advanced", label: "Media stream signature", type: "select", default: "warn", options: [{ value: "warn", label: "Warn" }, { value: "enforce", label: "Enforce" }] },
   { key: "VAULT_KEY", group: "advanced", label: "Encryption key for SSN and bank details", type: "secret", uiReadOnly: true, help: "Created automatically on first start. Losing it makes saved details unreadable." },
 ];

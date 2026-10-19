@@ -45,3 +45,10 @@ test(".env.example is generated from the settings table and is up to date", asyn
   const onDisk = readFileSync(new URL("../.env.example", import.meta.url), "utf8").replace(/\r\n/g, "\n");
   assert.equal(onDisk, renderEnvExample(), "run npm run env-example");
 });
+
+test("the Twilio signature check cannot be switched off from the Settings page", async () => {
+  const { SETTINGS } = await import("../src/settings-schema.mjs");
+  assert.ok(!SETTINGS.some((s) => s.key === "TWILIO_SIGNATURE_CHECK"));
+  const { readFileSync } = await import("node:fs");
+  assert.match(readFileSync(new URL("../.env.example", import.meta.url), "utf8"), /^TWILIO_SIGNATURE_CHECK=on$/m);
+});
