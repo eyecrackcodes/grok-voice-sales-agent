@@ -26,11 +26,16 @@ const hostname = (hostHeader) => {
   return h.startsWith("[") ? h.slice(0, h.indexOf("]") + 1) : h.split(":")[0];
 };
 
-// Returns { ok, status, setCookie }. `token` empty means the dashboard is open, which only
+const PROXY_HEADERS = ["x-forwarded-for", "forwarded", "x-real-ip", "cf-connecting-ip"];
+const OPEN_BEHIND_PROXY = "This dashboard has no password and the request came through a proxy or tunnel. Set a dashboard password on the Settings page (or DASHBOARD_TOKEN) before exposing the server.";
+
+// Returns { ok, status, error, setCookie }. `token` empty means the dashboard is open, which only
 // the loopback bind allows; then the Host and Origin checks stop DNS rebinding and cross-site POSTs.
 export function authorize(req, url, token) {
   if (!token) {
     if (!isLoopbackHost(hostname(req.headers.host))) return { ok: false, status: 403 };
+    // A reverse proxy on this machine makes every client look like loopback.
+    if (PROXY_HEADERS.some((h) => req.headers[h] !== undefined)) return { ok: false, status: 403, error: OPEN_BEHIND_PROXY };
     const origin = req.headers.origin;
     if (origin) {
       // "null" and malformed origins (sandboxed frames, file://) are refused, never thrown.

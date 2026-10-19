@@ -73,3 +73,13 @@ test("a null or malformed Origin is refused, never thrown", async () => {
   for (const origin of ["null", "not a url", "http://evil.example"])
     assert.equal(authorize({ headers: { host: "127.0.0.1:4319", origin } }, url, "").status, 403, origin);
 });
+
+test("an open dashboard refuses requests that came through a proxy or tunnel and says to set a password", () => {
+  for (const h of ["x-forwarded-for", "forwarded", "x-real-ip", "cf-connecting-ip"]) {
+    const r = authorize(req({ [h]: "203.0.113.9" }), at("/v2"), "");
+    assert.equal(r.ok, false, h);
+    assert.equal(r.status, 403, h);
+    assert.match(r.error, /dashboard password/, h);
+  }
+  assert.equal(authorize(req({ "x-forwarded-for": "203.0.113.9", authorization: "Bearer s3cret" }), at("/v2"), "s3cret").ok, true, "with a password set a proxy is fine");
+});

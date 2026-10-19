@@ -142,7 +142,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && url.pathname === "/healthz") return json(res, 200, { ok: true });
   if (viaTunnel(req)) return json(res, 404, { ok: false });
   const access = authorize(req, url, config.dashboardToken);
-  if (!access.ok) return json(res, access.status, { ok: false, error: access.status === 401 ? "Dashboard token required" : "Forbidden" });
+  if (!access.ok) return json(res, access.status, { ok: false, error: access.error ?? (access.status === 401 ? "Dashboard token required" : "Forbidden") });
   if (access.setCookie) res.setHeader("set-cookie", access.setCookie);
   const { pathname } = url;
   const parts = pathname.split("/").filter(Boolean);
