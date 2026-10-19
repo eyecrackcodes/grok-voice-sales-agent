@@ -70,7 +70,7 @@ export async function placeCall(lead, { source = config.source } = {}) {
   const { secret } = await (await fetch(`${localBase()}/stream-secret`, { headers: localAuthHeaders() })).json();
   const callId = `call-${Date.now().toString(36)}`;
   const params = { secret, callId, leadUid: lead.id ?? "", firstName: lead.first_name ?? "", lastName: lead.last_name ?? "",
-    state: lead.state ?? "", agentName: app.agentName, source, publicBase: base };
+    state: lead.state ?? "", agentName: app.agentName, source, publicBase: base, callerPhone: to };
   const twiml = `<Response><Connect><Stream url="${esc(base.replace(/^https/, "wss"))}/twilio-stream">${
     Object.entries(params).map(([k, v]) => `<Parameter name="${k}" value="${esc(v)}"/>`).join("")}</Stream></Connect></Response>`;
   const call = await twilio("/Calls.json", {

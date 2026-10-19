@@ -10,7 +10,7 @@ import { transferToAgent, setRecording } from "./transfer.mjs";
 const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r({ timedOut: true }), ms))]);
 
 export function handleTwilioStream(twilioWs, streamSecret) {
-  let streamSid, callSid, callId, leadUid, publicBase, session, crmWrite = null, transferred = false, synced = false;
+  let streamSid, callSid, callId, leadUid, publicBase, session, crmWrite = null, transferred = false, synced = false, callerPhone = "";
   const log = (...a) => console.log(`[${callId ?? "?"}]`, ...a);
   const toTwilio = (msg) => twilioWs.readyState === WebSocket.OPEN && twilioWs.send(JSON.stringify(msg));
 
@@ -38,7 +38,7 @@ export function handleTwilioStream(twilioWs, streamSecret) {
     transferred = true;
     await withTimeout(startCrmWrite() ?? Promise.resolve(), 8000);
     try {
-      await transferToAgent({ callSid, callId, publicBase, state: getState(callId), secret: streamSecret });
+      await transferToAgent({ callSid, callId, publicBase, state: getState(callId), secret: streamSecret, callerPhone });
       log("transferred to agent");
     } catch (e) {
       log("transfer failed", e.message);
@@ -64,6 +64,7 @@ export function handleTwilioStream(twilioWs, streamSecret) {
       callId = p.callId ?? callSid;
       leadUid = p.leadUid || null;
       publicBase = p.publicBase;
+      callerPhone = p.callerPhone ?? "";
       session = startSession({
         callId,
         lead: { uid: leadUid, name: p.firstName, callSid, source: p.source },

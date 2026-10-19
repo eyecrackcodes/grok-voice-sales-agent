@@ -28,13 +28,26 @@ export function whisperTwiml(callId, secret) {
   return `<Response><Say voice="Polly.Matthew-Neural">${esc(w.text)}</Say></Response>`;
 }
 
-export async function transferToAgent({ callSid, callId, publicBase, state, secret }) {
-  const agent = config.agentTransferNumber || env("AGENT_TRANSFER_NUMBER");
+// A queue answers the dial itself, so there is nobody to whisper to. It gets the caller's own
+// number instead, which is how a call queue matches the transfer to the caller's lead.
+export function transferTwiml({ agent, callerId, whisperUrl }) {
+  const number = whisperUrl ? `<Number url="${esc(whisperUrl)}">${esc(agent)}</Number>` : `<Number>${esc(agent)}</Number>`;
+  return `<Response><Dial callerId="${esc(callerId)}" timeout="25" answerOnBridge="true">${number}</Dial>`
+    + `<Say voice="Polly.Joanna-Neural">I'm sorry, our licensed agent couldn't pick up this second. We'll call you right back. Thank you so much.</Say></Response>`;
+}
+
+// person: whisper a summary to whoever answers and show our number. queue: connect straight
+// through showing the caller's own number (ours when we don't know it).
+export function buildTransfer({ mode = config.transferMode, agent, ourNumber, callerPhone, whisperUrl }) {
+  return mode === "queue"
+    ? transferTwiml({ agent, callerId: callerPhone || ourNumber })
+    : transferTwiml({ agent, callerId: ourNumber, whisperUrl });
+}
+
+export async function transferToAgent({ callSid, callId, publicBase, state, secret, callerPhone, agent = config.agentTransferNumber || env("AGENT_TRANSFER_NUMBER") }) {
   whispers.set(callId, { text: whisperText(state), secret });
   const whisperUrl = `${publicBase}/twiml/whisper?callId=${encodeURIComponent(callId)}&secret=${encodeURIComponent(secret)}`;
-  const twiml = `<Response><Dial callerId="${esc(env("TWILIO_PHONE_NUMBER"))}" timeout="25" answerOnBridge="true">`
-    + `<Number url="${esc(whisperUrl)}">${esc(agent)}</Number></Dial>`
-    + `<Say voice="Polly.Joanna-Neural">I'm sorry, ${esc(config.agentName)} couldn't pick up this second. They'll call you right back. Thank you so much.</Say></Response>`;
+  const twiml = buildTransfer({ agent, ourNumber: env("TWILIO_PHONE_NUMBER"), callerPhone, whisperUrl });
   await twilio(`/Calls/${callSid}.json`, {
     method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ Twiml: twiml }),
