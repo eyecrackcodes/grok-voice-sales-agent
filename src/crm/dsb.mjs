@@ -11,6 +11,7 @@
 import { env } from "../../scripts/env.mjs";
 import { vaultGet, vaultMasked } from "../vault.mjs";
 import { config } from "../config.mjs";
+import { MIN_LEAD_DAYS } from "../draft-date.mjs";
 import { MILESTONES, isNameMismatch, mismatchText } from "../progress.mjs";
 
 async function callTool(name, args = {}) {
@@ -180,7 +181,7 @@ const isTestLead = (policy) => Number(policy?.status) === TEST_LEAD_STATUS;
 const ORDINAL = { first: 1, second: 2, third: 3, fourth: 4, "1st": 1, "2nd": 2, "3rd": 3, "4th": 4 };
 const WEEKDAY = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
-// "11/18/2026", "the 3rd", or "third Wednesday" -> the first such date at least 3 days out, as MM/DD/YYYY.
+// "11/18/2026", "the 3rd", or "third Wednesday" -> the first such date at least MIN_LEAD_DAYS days out, as MM/DD/YYYY.
 // An exact date that has already passed is null, so the caller falls back to the deposit-day rule.
 export function nextDraftDate(text, today = new Date()) {
   const direct = mdy(text);
@@ -189,7 +190,7 @@ export function nextDraftDate(text, today = new Date()) {
     return new Date(y, m - 1, d) >= new Date(today.getFullYear(), today.getMonth(), today.getDate()) ? direct : null;
   }
   const s = String(text ?? "").toLowerCase();
-  const earliest = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 3);
+  const earliest = new Date(today.getFullYear(), today.getMonth(), today.getDate() + MIN_LEAD_DAYS);
   const fmt = (d) => `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()}`;
   const nth = s.match(/\b(first|second|third|fourth|1st|2nd|3rd|4th)\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)/);
   for (let k = 0; k < 3; k++) {

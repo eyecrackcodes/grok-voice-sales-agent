@@ -12,6 +12,9 @@ const utc = (y, m, d) => new Date(Date.UTC(y, m - 1, d));
 const addDays = (date, n) => new Date(date.getTime() + n * DAY_MS);
 const pad = (n) => String(n).padStart(2, "0");
 
+// Shared with the CRM adapter so the date read to the caller and the date filed agree.
+export const MIN_LEAD_DAYS = 2;
+
 export const todayUtc = (now = new Date()) => utc(now.getFullYear(), now.getMonth() + 1, now.getDate());
 
 function ordinal(n) {
@@ -41,7 +44,30 @@ export function ruleFromText(text) {
   return day ? { kind: "day", day: ORDINALS[day[1]] } : null;
 }
 
-const isHoliday = (d) => FIXED_HOLIDAYS.has(`${d.getUTCMonth() + 1}-${d.getUTCDate()}`);
+// Weekday wd (0=Sunday) of month m, the nth time (n=-1 for the last).
+function nthWeekday(y, m, wd, n) {
+  if (n > 0) return utc(y, m, 1 + ((wd - utc(y, m, 1).getUTCDay() + 7) % 7) + 7 * (n - 1));
+  const last = utc(y, m + 1, 0);
+  return addDays(last, -((last.getUTCDay() - wd + 7) % 7));
+}
+
+// A holiday on Saturday is observed Friday, on Sunday Monday.
+const observed = (d) => (d.getUTCDay() === 6 ? addDays(d, -1) : d.getUTCDay() === 0 ? addDays(d, 1) : d);
+
+const holidayCache = new Map();
+function federalHolidays(y) {
+  if (!holidayCache.has(y)) {
+    const fixed = [[1, 1], [6, 19], [7, 4], [11, 11], [12, 25]].map(([m, d]) => observed(utc(y, m, d)));
+    const floating = [nthWeekday(y, 1, 1, 3), nthWeekday(y, 2, 1, 3), nthWeekday(y, 5, 1, -1), nthWeekday(y, 9, 1, 1),
+      nthWeekday(y, 10, 1, 2), nthWeekday(y, 11, 4, 4)];
+    holidayCache.set(y, new Set([...fixed, ...floating].map((d) => d.getTime())));
+  }
+  return holidayCache.get(y);
+}
+
+// Next year is checked too because January 1 on a Saturday is observed on December 31.
+export const isFederalHoliday = (d) => federalHolidays(d.getUTCFullYear()).has(d.getTime()) || federalHolidays(d.getUTCFullYear() + 1).has(d.getTime());
+const isHoliday = isFederalHoliday;
 const isBusinessDay = (d) => d.getUTCDay() % 6 !== 0 && !isHoliday(d);
 
 export function paymentDate(rule, year, month) {
@@ -55,7 +81,7 @@ export function paymentDate(rule, year, month) {
   return d;
 }
 
-export function nextDraftDates(rule, today, { minLeadDays = 2, count = 2 } = {}) {
+export function nextDraftDates(rule, today, { minLeadDays = MIN_LEAD_DAYS, count = 2 } = {}) {
   const earliest = addDays(today, minLeadDays);
   const out = [];
   for (let k = 0; out.length < count && k < 24; k++) {
@@ -103,6 +129,12 @@ export function pickDraftDate({ depositDay, requested, factDepositDay, dob, toda
   if (requested) {
     const r = resolveRequested(requested, today);
     if (!r.ok) return r;
+    const earliest = addDays(today, MIN_LEAD_DAYS);
+    if (r.date < earliest || !isBusinessDay(r.date)) {
+      let next = r.date;
+      while (next < earliest || !isBusinessDay(next)) next = addDays(next, 1);
+      return { ok: false, error: `${spoken(r.date)} is not a day the bank can draft. It must be a business day at least ${MIN_LEAD_DAYS} days out. The nearest date that works is ${spoken(next)} (${mdy(next)}). Offer that or ask for another day.` };
+    }
     return { ok: true, date: r.date, draft_date: mdy(r.date), say: spoken(r.date), basis: "the date you asked for", alternative_say: null };
   }
   const stated = ruleFromText(depositDay ?? factDepositDay);

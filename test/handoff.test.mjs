@@ -45,3 +45,9 @@ test("beneficiaries split evenly unless shares are stated", () => {
   assert.deepEqual(parseBeneficiaries("Karen (daughter) 60%; Lisa (daughter) 40%").map((b) => b.beneficiary_ownership), ["60", "40"]);
   assert.equal(parseBeneficiaries("Bev Thompson (wife)")[0].beneficiary_relationship, "wife");
 });
+
+test("the CRM draft date uses the same lead time as the spoken date", async () => {
+  const { MIN_LEAD_DAYS } = await import("../src/draft-date.mjs");
+  const today = new Date(2026, 9, 18);
+  assert.equal(nextDraftDate(`the ${18 + MIN_LEAD_DAYS}th`, today), `10/${18 + MIN_LEAD_DAYS}/2026`);
+});

@@ -41,8 +41,8 @@ test("a fourth Wednesday on Christmas moves to Dec 24", () => {
   assert.equal(mdy(paymentDate({ kind: "wednesday", nth: 4 }, 2030, 12)), "12/24/2030");
 });
 
-test("a payment day on a Saturday New Year steps back across the year to Friday", () => {
-  assert.equal(mdy(paymentDate({ kind: "day", day: 1 }, 2028, 1)), "12/31/2027");
+test("a payment day on a Saturday New Year steps back across the year to Thursday, since Friday Dec 31 is the observed holiday", () => {
+  assert.equal(mdy(paymentDate({ kind: "day", day: 1 }, 2028, 1)), "12/30/2027");
 });
 
 test("requested dates resolve to the next future occurrence", () => {
@@ -101,4 +101,44 @@ test("the basis explains a payment moved early for a weekend or holiday, and sta
   assert.match(pickDraftDate({ dob: "08/04/1942", today }).basis, /second Wednesday; that day is a weekend or holiday/);
   assert.match(pickDraftDate({ depositDay: "the 1st", dob: "08/04/1942", today }).basis, /comes on the 1st; that day is a weekend or holiday/);
   assert.doesNotMatch(pickDraftDate({ dob: "08/15/1942", today }).basis, /weekend or holiday/);
+});
+
+const pay = (day, y, m) => mdy(paymentDate({ kind: "day", day }, y, m));
+
+test("Labor Day 2026 (Sep 7) moves a payment to the Friday before", () => {
+  assert.equal(pay(7, 2026, 9), "09/04/2026");
+});
+
+test("July 4 on a Saturday is observed Friday July 3, so a payment on the 3rd moves to Thursday", () => {
+  assert.equal(pay(3, 2026, 7), "07/02/2026");
+});
+
+test("Thanksgiving, MLK, Presidents, Memorial and Columbus Day are skipped in any year", () => {
+  assert.equal(pay(26, 2026, 11), "11/25/2026");
+  assert.equal(pay(25, 2027, 11), "11/24/2027");
+  assert.equal(pay(19, 2026, 1), "01/16/2026");
+  assert.equal(pay(15, 2027, 2), "02/12/2027");
+  assert.equal(pay(25, 2030, 5), "05/24/2030");
+  assert.equal(pay(12, 2026, 10), "10/09/2026");
+});
+
+test("a Sunday holiday is observed Monday: Juneteenth 2022 fell on Sunday, so Monday June 20 is a holiday", () => {
+  assert.equal(pay(20, 2022, 6), "06/17/2022");
+});
+
+test("a requested Saturday is refused with the nearest business day after it", () => {
+  const r = pickDraftDate({ requested: "11/14/2026", dob: "03/04/1950", today });
+  assert.equal(r.ok, false);
+  assert.match(r.error, /Monday, November 16th/);
+  assert.match(r.error, /11\/16\/2026/);
+});
+
+test("a requested holiday or a date inside the lead time is refused with the next valid day", () => {
+  const holiday = pickDraftDate({ requested: "11/26/2026", today });
+  assert.equal(holiday.ok, false);
+  assert.match(holiday.error, /Friday, November 27th/);
+  const tooSoon = pickDraftDate({ requested: "10/19/2026", today });
+  assert.equal(tooSoon.ok, false);
+  assert.match(tooSoon.error, /Tuesday, October 20th/);
+  assert.equal(pickDraftDate({ requested: "10/20/2026", today }).ok, true);
 });
