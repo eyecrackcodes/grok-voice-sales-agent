@@ -40,48 +40,35 @@ These steps place one test call to your own phone. Commands work in Windows Powe
    npm install
    ```
 
-2. Create your settings file.
-
-   ```
-   # macOS or Linux
-   cp .env.example .env
-   # Windows PowerShell
-   copy .env.example .env
-   ```
-
-3. Open `.env` in a text editor and fill in `X_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_PHONE_NUMBER`. Generate a `VAULT_KEY` and paste it in:
-
-   ```
-   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-   ```
-
-4. Put your own phone number in `DIAL_ALLOWLIST` in E.164 form, for example `+15125550123`. In demo mode the bot refuses every number that is not listed.
-
-5. Start the server.
+2. Start the server.
 
    ```
    npm start
    ```
 
-   It prints the dashboard address and warns about any missing keys.
+   It prints the Settings address. On first start it creates `VAULT_KEY`, the key that encrypts SSN and bank details, in `data/settings.json`. Back that file up.
 
-6. Open http://127.0.0.1:4319/v2 in your browser.
-
-7. In a second terminal, start the tunnel and log it to `data/tunnel.log`. The app reads the public address from that file.
+3. In a second terminal, start the tunnel so Twilio can reach your computer.
 
    ```
    cloudflared tunnel --url http://127.0.0.1:4319 --logfile data/tunnel.log
    ```
 
-   Wait until `data/tunnel.log` contains a `https://something.trycloudflare.com` address. Alternatively set `PUBLIC_BASE` in `.env` to your own tunnel address and restart.
+   The app reads the `https://something.trycloudflare.com` address from `data/tunnel.log`. If you run your own server or tunnel, enter its address on the Settings page instead.
 
-8. In a third terminal, place the call.
+4. Open http://127.0.0.1:4319/settings in your browser. The setup checklist at the top lists what is missing. Fill in your xAI API key, your Twilio Account SID, Auth Token and phone number, your own cell under **Numbers the bot may call while testing**, and a transfer number. Select **Save**, then use the **Test** buttons to check each connection. In demo mode the bot refuses every number that is not on the test list.
+
+5. When the checklist is complete, open Mission Control from the Settings page. The gear icon in its header goes back to Settings.
+
+6. In a third terminal, place the call.
 
    ```
    node scripts/call-lead.mjs --phone +1YOURNUMBER --name You
    ```
 
    Your phone rings. Answer, and watch the call move through the stages on the dashboard.
+
+Settings are saved in `data/settings.json`. A `.env` file still works. Copy `.env.example` to `.env` and fill it in. A value saved on the Settings page takes priority over `.env`. A variable set in the server's own environment, for example with `docker run -e`, takes priority over both, and the Settings page shows it as locked.
 
 If a step fails, the error message names the missing setting. A call to a number that is not in `DIAL_ALLOWLIST` is refused with a log line that says why.
 
@@ -93,7 +80,7 @@ See [docs/architecture.html](docs/architecture.html) for the component diagram, 
 
 ## Customizing the script and flow
 
-- `src/prompt.mjs` holds the whole script the bot follows: tone, the NEPQ questioning approach, price presentation, objection answers and the application steps. Edit the wording freely. Business names, the carrier line and the agent's name come from `.env`, not the prompt.
+- `src/prompt.mjs` holds the whole script the bot follows: tone, the NEPQ questioning approach, price presentation, objection answers and the application steps. Edit the wording freely. Business names, the carrier line and the agent's name come from the Settings page, not the prompt.
 - `src/flow.mjs` defines the stages, the facts the bot may save, and the gates. Each stage has a `requires` list of facts the server checks before it allows entry. Add a fact, then add it to the `requires` of the stage that depends on it, and the bot cannot skip it.
 - `src/call-state.mjs` folds the event log into call state. It is pure, so replays and tests run the same code as live calls.
 - Replay a recorded call on the dashboard with `npm run sim -- sim/fe-happy-path.json`. This costs nothing.
@@ -120,7 +107,7 @@ Keys under `rates` are ages. `M` and `F` are male and female. `N` is non-tobacco
 
 ## CRM adapters
 
-Set `CRM_PROVIDER` in `.env`.
+Pick the CRM on the Settings page (or set `CRM_PROVIDER` in `.env`), then restart the server.
 
 - `none` (default). Leads come from `data/leads.csv` with the columns `id, first_name, last_name, phone, state, timezone, dnc`. On first run the file is copied from `data/leads.example.csv`, which holds one fake lead with a 555 number. Handoffs and outcomes are appended to `data/outcomes.jsonl`. SSN and bank details are never written there, only the masked values. A `dnc` outcome blocks the lead from future dialing.
 - `dsb`. An optional adapter for a hosted CRM (Digital Senior Benefits) with a tool-call HTTP API. It needs `DSB_BASE`, `DSB_CRM_MCP`, `CRM_CARRIER_ID` and `CRM_PRODUCT_ID`. Status ids and field names are that CRM's own. Use a token with the least privilege that works.
@@ -153,7 +140,7 @@ Practice calls spend real xAI credit, about $0.08 per minute of Grok Voice plus 
 npm test
 ```
 
-The tests cover the call-state gates, rate math, the Twilio signature check, dashboard token access, the dial allowlist, the CSV adapter, and the SSN, routing and account number checks. They make no network calls.
+The tests cover the call-state gates, rate math, the Twilio signature check, dashboard token access, the settings store, validation and API (with stubbed xAI, Twilio and CRM calls), the dial allowlist, the CSV adapter, and the SSN, routing and account number checks. They make no network calls.
 
 ## Project layout
 
@@ -161,7 +148,7 @@ The tests cover the call-state gates, rate math, the Twilio signature check, das
 - `src/crm/` CRM adapters
 - `src/rates/` rate tables
 - `scripts/` call, practice, grading and diagram scripts
-- `public/` dashboards
+- `public/` dashboards and the Settings page
 - `docs/` architecture page and diagram sources
 - `sim/` replayable call scripts and practice personas
 - `test/` unit tests
