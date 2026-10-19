@@ -1,1 +1,575 @@
-<!doctype html><title>Settings</title>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+:root, :root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #05070b; --glow1: rgba(96, 165, 250, .12); --glow2: rgba(251, 146, 60, .06); --grid: rgba(148, 163, 184, .035);
+  --panel: rgba(17, 22, 32, .82); --panel-hi: rgba(255, 255, 255, .045); --bar: rgba(5, 7, 11, .72); --field: #0b1018;
+  --line: rgba(148, 163, 184, .13); --line2: rgba(148, 163, 184, .24);
+  --text: #e8edf5; --soft: #bcc5d4; --muted: #8b96aa; --dim: #5d6779;
+  --open: #60a5fa; --good: #34d399; --bad: #f87171; --warn: #fbbf24; --lit: #fb923c; --ink: #05110c;
+  --shadow: 0 8px 30px rgba(0, 0, 0, .28); --toast: #141b27;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #eef1f6; --glow1: rgba(37, 99, 235, .07); --glow2: rgba(234, 88, 12, .05); --grid: rgba(15, 23, 42, .035);
+  --panel: rgba(255, 255, 255, .95); --panel-hi: rgba(15, 23, 42, .04); --bar: rgba(255, 255, 255, .85); --field: #ffffff;
+  --line: rgba(15, 23, 42, .1); --line2: rgba(15, 23, 42, .19);
+  --text: #0f172a; --soft: #334155; --muted: #5b6678; --dim: #929eb2;
+  --open: #2563eb; --good: #059669; --bad: #dc2626; --warn: #b45309; --lit: #ea580c; --ink: #ffffff;
+  --shadow: 0 6px 20px rgba(15, 23, 42, .08); --toast: #ffffff;
+}
+:root { --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace; --r: 14px; }
+* { box-sizing: border-box; }
+html { font-size: 16px; scroll-padding-top: 5rem; }
+body {
+  margin: 0; min-height: 100vh; color: var(--text); font: 400 1rem/1.5 var(--sans); padding-bottom: 6rem;
+  background:
+    radial-gradient(1200px 520px at 50% -180px, var(--glow1), transparent 70%),
+    radial-gradient(800px 400px at 100% 110%, var(--glow2), transparent 70%),
+    linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 100% 32px,
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 32px 100%,
+    var(--bg);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--open); }
+:focus-visible { outline: 2px solid var(--open); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.top { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: .8rem; padding: .55rem 1rem; border-bottom: 1px solid var(--line); background: var(--bar); backdrop-filter: blur(14px); }
+.brand { display: flex; align-items: center; gap: .65rem; min-width: 0; }
+.brand svg { width: 1.85rem; height: 1.85rem; flex: none; }
+.brand b { display: block; font-size: 1.05rem; font-weight: 700; }
+.brand small { display: block; color: var(--muted); font-size: .78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.top .grow { flex: 1; }
+.btn { display: inline-flex; align-items: center; gap: .4rem; background: transparent; border: 1px solid var(--line2); color: var(--soft); border-radius: 9px; padding: .45rem .8rem; font-weight: 600; font-size: .86rem; cursor: pointer; white-space: nowrap; text-decoration: none; }
+.btn:hover { border-color: var(--muted); color: var(--text); }
+.btn.primary { background: var(--open); border-color: var(--open); color: #fff; }
+.btn.primary:hover { filter: brightness(1.08); color: #fff; }
+.btn.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+.btn.icon { padding: .4rem .5rem; }
+.btn svg { width: 1.05rem; height: 1.05rem; }
+.btn[disabled] { opacity: .55; cursor: progress; }
+
+.wrap { max-width: 1120px; margin: 0 auto; padding: 1rem; display: grid; grid-template-columns: 13.5rem minmax(0, 1fr); gap: 1.2rem; align-items: start; }
+nav { position: sticky; top: 4.6rem; display: flex; flex-direction: column; gap: .2rem; }
+nav a { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .5rem .75rem; border-radius: 9px; color: var(--soft); text-decoration: none; font-weight: 500; font-size: .93rem; }
+nav a:hover, nav a.on { background: var(--panel-hi); color: var(--text); }
+nav a.on { box-shadow: inset 3px 0 0 var(--open); }
+nav a i { font-style: normal; min-width: 1.3rem; height: 1.3rem; padding: 0 .3rem; border-radius: 999px; background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); font-size: .72rem; font-weight: 700; display: grid; place-items: center; }
+
+.card { border: 1px solid var(--line); background: var(--panel); border-radius: var(--r); box-shadow: var(--shadow); padding: 1.1rem 1.25rem; margin-bottom: 1rem; }
+.card > h2 { margin: 0 0 .2rem; font-size: 1.15rem; }
+.card > .sub { margin: 0 0 .6rem; color: var(--muted); font-size: .9rem; }
+
+#setup.ready { border-color: color-mix(in srgb, var(--good) 45%, transparent); }
+.progress { height: .4rem; border-radius: 999px; background: var(--panel-hi); overflow: hidden; margin: .5rem 0 .9rem; }
+.progress span { display: block; height: 100%; background: var(--good); border-radius: inherit; transition: width .3s; }
+.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: .15rem; }
+.checks li { display: grid; grid-template-columns: 1.6rem minmax(0, 1fr) auto; gap: .6rem; align-items: start; padding: .45rem .2rem; border-top: 1px solid var(--line); }
+.checks li:first-child { border-top: 0; }
+.tick { width: 1.4rem; height: 1.4rem; border-radius: 50%; display: grid; place-items: center; border: 2px solid var(--line2); margin-top: .05rem; }
+.tick svg { width: .85rem; height: .85rem; }
+.done .tick { background: var(--good); border-color: var(--good); color: var(--ink); }
+.checks b { font-weight: 600; }
+.done b { color: var(--soft); }
+.checks small { display: block; color: var(--muted); font-size: .86rem; }
+
+.field { padding: .9rem 0; border-top: 1px solid var(--line); }
+.field:first-of-type { border-top: 0; }
+.field[hidden] { display: none; }
+.field.changed { box-shadow: inset 3px 0 0 var(--lit); margin-left: -1.25rem; padding-left: 1.25rem; }
+.lbl { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem .6rem; margin-bottom: .25rem; }
+.lbl label, .lbl .name { font-weight: 600; }
+.chip { font-size: .72rem; font-weight: 600; letter-spacing: .03em; padding: .08rem .5rem; border-radius: 999px; border: 1px solid var(--line2); color: var(--muted); white-space: nowrap; }
+.chip.req { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.chip.src-settings { color: var(--open); border-color: color-mix(in srgb, var(--open) 40%, transparent); }
+.chip.src-environment { color: var(--lit); border-color: color-mix(in srgb, var(--lit) 45%, transparent); }
+.help { margin: 0 0 .5rem; color: var(--muted); font-size: .9rem; }
+.note { margin: .45rem 0 0; font-size: .86rem; color: var(--soft); display: flex; gap: .4rem; align-items: baseline; }
+.note.warn { color: var(--warn); }
+.ctl { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.ctl > input, .ctl > select, .ctl > textarea { flex: 1 1 16rem; min-width: 0; }
+input[type=text], input[type=password], input[type=tel], input[type=url], input[type=number], select, textarea {
+  width: 100%; background: var(--field); border: 1px solid var(--line2); border-radius: 9px; padding: .55rem .7rem; font-size: 1rem;
+}
+textarea { min-height: 6.5rem; resize: vertical; line-height: 1.45; }
+input:disabled, select:disabled, textarea:disabled { opacity: .7; cursor: not-allowed; }
+.err input, .err select, .err textarea { border-color: var(--bad); }
+.errmsg { color: var(--bad); font-size: .88rem; margin: .4rem 0 0; font-weight: 500; }
+.saved { display: inline-flex; align-items: center; gap: .4rem; padding: .45rem .7rem; border-radius: 9px; background: var(--panel-hi); border: 1px dashed var(--line2); color: var(--soft); font-size: .92rem; }
+.saved svg { width: 1rem; height: 1rem; color: var(--good); }
+.saved.removing { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+
+.switch { display: inline-flex; align-items: center; gap: .6rem; cursor: pointer; user-select: none; }
+.switch input { appearance: none; width: 2.6rem; height: 1.5rem; border-radius: 999px; background: var(--line2); position: relative; cursor: pointer; margin: 0; transition: background .15s; flex: none; }
+.switch input::after { content: ""; position: absolute; top: .2rem; left: .2rem; width: 1.1rem; height: 1.1rem; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+.switch input:checked { background: var(--good); }
+.switch input:checked::after { transform: translateX(1.1rem); }
+.switch input:disabled { cursor: not-allowed; }
+.switch span { font-weight: 500; color: var(--soft); }
+
+.result { margin: .5rem 0 0; font-size: .9rem; display: flex; gap: .45rem; align-items: baseline; }
+.result.ok { color: var(--good); }
+.result.bad { color: var(--bad); }
+.result.busy { color: var(--muted); }
+.action { margin-top: .6rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+
+.bar { position: fixed; left: 50%; bottom: 1rem; transform: translateX(-50%); z-index: 20; width: min(46rem, calc(100% - 2rem)); display: flex; align-items: center; gap: .6rem; padding: .7rem .8rem .7rem 1.1rem; border-radius: 14px; background: var(--toast); border: 1px solid var(--line2); box-shadow: 0 16px 40px rgba(0, 0, 0, .35); }
+.bar[hidden] { display: none; }
+.bar p { margin: 0; flex: 1; font-weight: 600; min-width: 0; }
+.bar p.bad { color: var(--bad); }
+
+#toast { position: fixed; top: 4.4rem; left: 50%; transform: translateX(-50%); z-index: 30; padding: .6rem 1rem; border-radius: 12px; background: var(--toast); border: 1px solid var(--line2); box-shadow: var(--shadow); font-weight: 600; max-width: calc(100% - 2rem); }
+#toast[hidden] { display: none; }
+#toast.ok { color: var(--good); }
+#toast.bad { color: var(--bad); }
+
+dialog { border: 1px solid var(--line2); border-radius: 16px; background: var(--toast); color: var(--text); padding: 1.3rem 1.4rem; width: min(30rem, calc(100% - 2rem)); box-shadow: 0 24px 60px rgba(0, 0, 0, .45); }
+dialog::backdrop { background: rgba(2, 6, 12, .55); }
+dialog h2 { margin: 0 0 .5rem; font-size: 1.1rem; }
+dialog p { margin: 0 0 1.1rem; color: var(--soft); }
+dialog .row { display: flex; justify-content: flex-end; gap: .5rem; flex-wrap: wrap; }
+
+.loading { padding: 3rem 1rem; text-align: center; color: var(--muted); }
+
+@media (max-width: 760px) {
+  html { scroll-padding-top: 7.5rem; }
+  .wrap { grid-template-columns: minmax(0, 1fr); padding: .75rem 1rem; gap: .6rem; }
+  nav { position: sticky; top: 3.2rem; z-index: 5; flex-direction: row; overflow-x: auto; gap: .35rem; padding: .4rem 0; margin: 0 -1rem; padding-inline: 1rem; background: var(--bar); backdrop-filter: blur(14px); scrollbar-width: none; }
+  nav a { flex: none; border: 1px solid var(--line2); padding: .35rem .7rem; font-size: .86rem; }
+  nav a.on { box-shadow: none; border-color: var(--open); }
+  .top { padding: .5rem 1rem; gap: .5rem; }
+  .brand small { display: none; }
+  .top .mc-label { display: none; }
+  .card { padding: 1rem; }
+  .field.changed { margin-left: -1rem; padding-left: 1rem; }
+  .checks li { grid-template-columns: 1.6rem minmax(0, 1fr); }
+  .checks li > .btn { grid-column: 2; justify-self: start; }
+  .bar { bottom: .5rem; padding: .6rem .6rem .6rem .9rem; }
+  .bar p { font-size: .9rem; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="bm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fb923c"/><stop offset="1" stop-color="#7aa2ff"/></linearGradient></defs><rect x="1" y="1" width="30" height="30" rx="8" fill="none" stroke="url(#bm)" stroke-width="2"/><path d="M8 21 L13 13 L18 18 L24 9" fill="none" stroke="url(#bm)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="24" cy="9" r="2.6" fill="#fb923c"/></svg>
+    <div><b>Settings</b><small>Grok Voice Sales Agent</small></div>
+  </div>
+  <span class="grow"></span>
+  <a id="mc" class="btn" href="/v2?skip-setup=1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l5-7 4 4 7-9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="mc-label">Skip to Mission Control</span></a>
+  <button id="theme" class="btn icon" type="button" aria-label="Switch light or dark theme" title="Switch light or dark theme"></button>
+</header>
+
+<div class="wrap">
+  <nav id="nav" aria-label="Settings sections"></nav>
+  <main id="main"><p class="loading">Loading your settings…</p></main>
+</div>
+
+<div id="bar" class="bar" hidden role="region" aria-label="Unsaved changes">
+  <p id="bar-msg" aria-live="polite"></p>
+  <button id="discard" class="btn" type="button">Discard</button>
+  <button id="save" class="btn primary" type="button">Save</button>
+</div>
+
+<div id="toast" role="status" aria-live="polite" hidden></div>
+
+<dialog id="confirm" aria-labelledby="cf-title">
+  <h2 id="cf-title"></h2>
+  <p id="cf-body"></p>
+  <div class="row"><button id="cf-no" class="btn" type="button">Cancel</button><button id="cf-yes" class="btn primary" type="button"></button></div>
+</dialog>
+
+<script>
+const FONT_CSS = "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap";
+const ICON = {
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>',
+  lock: '<rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/>',
+  sun: '<circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
+};
+const SOURCE = {
+  environment: "Set on the server",
+  settings: "Saved here",
+  ".env": "From your .env file",
+  default: "Default",
+};
+const TEST_LABEL = { xai: "Test xAI", twilio: "Test Twilio", public: "Test address", crm: "Test CRM" };
+
+const $ = (id) => document.getElementById(id);
+function h(tag, attrs = {}, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === undefined || v === null || v === false) continue;
+    if (k === "text") el.textContent = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "hidden" || k === "checked" || k === "disabled" || k === "value") el[k] = v;
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const kid of kids.flat()) if (kid !== null && kid !== undefined && kid !== false) el.append(kid);
+  return el;
+}
+const svg = (body, cls) => {
+  const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("aria-hidden", "true");
+  if (cls) s.setAttribute("class", cls);
+  s.innerHTML = body;
+  return s;
+};
+
+let data = null;
+const pending = new Map();   // key -> new value (strings, the way the server stores them)
+const clears = new Set();    // secrets to remove on save
+let errors = {};
+const rowEls = new Map();    // key -> { el, sync() }
+
+const rowOf = (key) => data.settings.find((s) => s.key === key);
+const original = (row) => (row.type === "secret" ? "" : row.value ?? "");
+const current = (key) => (pending.has(key) ? pending.get(key) : original(rowOf(key)));
+const visible = (row) => !row.when || Object.entries(row.when).every(([k, v]) => current(k) === String(v));
+const dirtyCount = () => pending.size + clears.size;
+
+function setValue(row, value) {
+  if (value === original(row)) pending.delete(row.key); else pending.set(row.key, value);
+  delete errors[row.key];
+  refresh();
+}
+
+/* ---------- confirm dialog ---------- */
+function ask({ title, body, yes }) {
+  const d = $("confirm");
+  $("cf-title").textContent = title;
+  $("cf-body").textContent = body;
+  $("cf-yes").textContent = yes;
+  return new Promise((resolve) => {
+    const done = (v) => { d.close(); $("cf-yes").onclick = $("cf-no").onclick = d.oncancel = null; resolve(v); };
+    $("cf-yes").onclick = () => done(true);
+    $("cf-no").onclick = () => done(false);
+    d.oncancel = (e) => { e.preventDefault(); done(false); };
+    d.showModal();
+    $("cf-no").focus();
+  });
+}
+
+let toastTimer;
+function toast(text, kind = "ok") {
+  const t = $("toast");
+  t.textContent = text; t.className = kind; t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, 4000);
+}
+
+/* ---------- controls, one per schema type ---------- */
+function textInput(row, type) {
+  const input = h("input", { id: `f-${row.key}`, type, value: row.value ?? "", disabled: row.locked, autocomplete: "off", spellcheck: "false",
+    "aria-describedby": `d-${row.key}`, inputmode: row.type === "phone" ? "tel" : undefined,
+    placeholder: row.type === "phone" ? "(512) 555-0100" : row.type === "phones" ? "(512) 555-0100, (512) 555-0101" : row.type === "url" ? "https://" : undefined,
+    min: row.min, max: row.max, oninput: (e) => setValue(row, e.target.value) });
+  return { ctl: input, reset: () => { input.value = row.value ?? ""; } };
+}
+
+function secretControl(row) {
+  const wrap = h("div", { class: "ctl" });
+  const input = h("input", { id: `f-${row.key}`, type: "password", autocomplete: "new-password", spellcheck: "false", "aria-describedby": `d-${row.key}`,
+    placeholder: row.set ? "Paste the new value" : "Paste it here", oninput: (e) => setValue(row, e.target.value.trim()) });
+  const show = h("button", { class: "btn", type: "button", "aria-pressed": "false", text: "Show",
+    onclick: () => { const on = input.type === "password"; input.type = on ? "text" : "password"; show.textContent = on ? "Hide" : "Show"; show.setAttribute("aria-pressed", String(on)); } });
+  let mode = row.set ? "saved" : "edit";
+  const add = (...kids) => wrap.append(...kids.filter(Boolean));
+  const draw = () => {
+    wrap.replaceChildren();
+    const savedText = row.last4 ? `Saved, ends in ${row.last4}` : "Saved";
+    if (row.uiReadOnly || row.locked) {
+      add(h("span", { class: "saved", id: `f-${row.key}`, tabindex: "-1" }, row.set ? svg(ICON.check) : null, row.set ? savedText : "Not set yet"));
+      return;
+    }
+    if (clears.has(row.key)) {
+      add(h("span", { class: "saved removing", text: "Will be removed when you save" }),
+        h("button", { class: "btn", type: "button", text: "Undo", onclick: () => { clears.delete(row.key); refresh(); } }));
+      return;
+    }
+    if (mode === "saved") {
+      add(h("span", { class: "saved" }, svg(ICON.check), savedText),
+        h("button", { class: "btn", type: "button", id: `f-${row.key}`, text: "Replace", onclick: () => { mode = "edit"; draw(); input.focus(); } }),
+        row.source === "settings" ? h("button", { class: "btn danger", type: "button", text: "Remove", onclick: () => { clears.add(row.key); pending.delete(row.key); input.value = ""; refresh(); } }) : null);
+      return;
+    }
+    add(input, show, row.set ? h("button", { class: "btn", type: "button", text: "Cancel",
+      onclick: () => { input.value = ""; pending.delete(row.key); mode = "saved"; refresh(); } }) : null);
+  };
+  draw();
+  return { ctl: wrap, sync: draw, reset: () => { input.value = ""; mode = row.set ? "saved" : "edit"; draw(); } };
+}
+
+function boolControl(row) {
+  const input = h("input", { id: `f-${row.key}`, type: "checkbox", role: "switch", checked: row.value === "true", disabled: row.locked, "aria-describedby": `d-${row.key}` });
+  const state = h("span", { text: input.checked ? "On" : "Off" });
+  input.addEventListener("change", async () => {
+    if (row.danger && input.checked) {
+      const yes = await ask({ title: `Turn on "${row.label}"?`, body: row.help ?? "This changes how the bot behaves on real calls.", yes: "Turn it on" });
+      if (!yes) { input.checked = false; return; }
+    }
+    state.textContent = input.checked ? "On" : "Off";
+    setValue(row, String(input.checked));
+  });
+  return { ctl: h("label", { class: "switch" }, input, state, h("span", { class: "sr", text: row.label })),
+    reset: () => { input.checked = row.value === "true"; state.textContent = input.checked ? "On" : "Off"; } };
+}
+
+function selectControl(row) {
+  const sel = h("select", { id: `f-${row.key}`, disabled: row.locked, "aria-describedby": `d-${row.key}`, onchange: (e) => setValue(row, e.target.value) },
+    row.options.map((o) => h("option", { value: o.value, text: o.label })));
+  if (!row.options.some((o) => o.value === row.value)) sel.prepend(h("option", { value: row.value, text: row.value || "Choose one" }));
+  sel.value = row.value;
+  return { ctl: sel, reset: () => { sel.value = row.value; } };
+}
+
+function textareaControl(row) {
+  const ta = h("textarea", { id: `f-${row.key}`, disabled: row.locked, "aria-describedby": `d-${row.key}`, rows: 4, oninput: (e) => setValue(row, e.target.value) });
+  ta.value = row.value ?? "";
+  return { ctl: ta, reset: () => { ta.value = row.value ?? ""; } };
+}
+
+const CONTROL = {
+  secret: secretControl, bool: boolControl, select: selectControl, textarea: textareaControl,
+  text: (r) => textInput(r, "text"), phone: (r) => textInput(r, "tel"), phones: (r) => textInput(r, "text"),
+  url: (r) => textInput(r, "url"), number: (r) => textInput(r, "number"),
+};
+
+/* ---------- tests and actions ---------- */
+async function saveFirst() {
+  if (!dirtyCount()) return true;
+  return save();
+}
+
+async function runCheck(button, out, url, busyText) {
+  if (!(await saveFirst())) return;
+  button.disabled = true;
+  out.className = "result busy"; out.textContent = busyText; out.hidden = false;
+  try {
+    const res = await fetch(url, { method: "POST" });
+    const r = await res.json().catch(() => ({ ok: false, message: `The server answered ${res.status}.` }));
+    out.className = `result ${r.ok ? "ok" : "bad"}`;
+    out.replaceChildren(r.ok ? svg(ICON.check) : "", r.message ?? r.error ?? "No answer.");
+    out.querySelector("svg")?.setAttribute("style", "width:1rem;height:1rem;flex:none;align-self:center");
+  } catch {
+    out.className = "result bad"; out.textContent = "Could not reach this server. Is it still running?";
+  } finally { button.disabled = false; }
+}
+
+/* ---------- rendering ---------- */
+function fieldRow(row) {
+  const made = CONTROL[row.type](row);
+  const err = h("p", { class: "errmsg", id: `e-${row.key}`, hidden: true });
+  const testOut = h("p", { class: "result", hidden: true, role: "status" });
+  const testBtn = row.test && !row.uiReadOnly ? h("button", { class: "btn", type: "button", text: TEST_LABEL[row.test] ?? "Test",
+    onclick: () => runCheck(testBtn, testOut, `/api/settings/test/${row.test}`, "Checking…") }) : null;
+  const labelEl = ["secret"].includes(row.type) && (row.uiReadOnly || row.locked || row.set)
+    ? h("span", { class: "name", text: row.label })
+    : row.type === "bool" ? h("span", { class: "name", text: row.label }) : h("label", { for: `f-${row.key}`, text: row.label });
+  const ctl = made.ctl.classList?.contains("ctl") ? made.ctl : h("div", { class: "ctl" }, made.ctl);
+  if (testBtn) ctl.append(testBtn);
+  const el = h("div", { class: "field", id: `row-${row.key}`, "data-key": row.key },
+    h("div", { class: "lbl" }, labelEl,
+      row.required ? h("span", { class: "chip req", text: "Required" }) : null,
+      h("span", { class: `chip src-${row.source === ".env" ? "dotenv" : row.source}`, title: "Where the current value comes from", text: SOURCE[row.source] ?? row.source })),
+    row.help ? h("p", { class: "help", id: `d-${row.key}`, text: row.help }) : h("span", { id: `d-${row.key}`, hidden: true }),
+    ctl,
+    row.locked ? h("p", { class: "note" }, svg(ICON.lock, "ni"), "This comes from the server's environment (for example docker -e), so change it there.") : null,
+    row.uiReadOnly && !row.locked ? h("p", { class: "note", text: "Managed automatically. Shown here so you know it's set." }) : null,
+    row.restart ? h("p", { class: "note warn", text: "A change here takes effect after you restart the server." }) : null,
+    err, testOut);
+  el.querySelectorAll("svg.ni").forEach((s) => s.setAttribute("style", "width:.95rem;height:.95rem;flex:none;align-self:center"));
+  rowEls.set(row.key, { el, made, err });
+  return el;
+}
+
+function setupCard() {
+  const { items, ready } = data.checklist;
+  const done = items.filter((i) => i.done).length;
+  return h("section", { class: `card${ready ? " ready" : ""}`, id: "setup", "aria-labelledby": "setup-title" },
+    h("h2", { id: "setup-title", text: ready ? "You're ready to make calls" : "Get ready to make calls" }),
+    h("p", { class: "sub", text: ready ? "Everything the bot needs is set. You can still change anything below."
+      : `${done} of ${items.length} done. Finish the steps below, then open Mission Control.` }),
+    h("div", { class: "progress", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": String(items.length), "aria-valuenow": String(done), "aria-label": "Setup progress" },
+      h("span", { style: `width:${(done / items.length) * 100}%` })),
+    h("ul", { class: "checks" }, items.map((i) => h("li", { class: i.done ? "done" : "" },
+      h("span", { class: "tick" }, i.done ? svg(ICON.check) : h("span", { class: "sr", text: "Not done:" })),
+      h("div", {}, h("b", { text: i.label }), i.done ? h("span", { class: "sr", text: " (done)" }) : h("small", { text: i.hint })),
+      i.done ? null : h("button", { class: "btn", type: "button", text: "Go there", onclick: () => goTo(i.key) })))),
+    ready ? h("p", { style: "margin:.9rem 0 0" }, h("a", { class: "btn primary", href: "/v2", text: "Open Mission Control" })) : null);
+}
+
+function goTo(key) {
+  const row = rowEls.get(key);
+  if (!row) return;
+  row.el.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+  (row.el.querySelector(`#f-${key}`) ?? row.el.querySelector("input, select, textarea, button"))?.focus({ preventScroll: true });
+}
+
+function groupCard(group) {
+  const rows = data.settings.filter((s) => s.group === group.id);
+  const card = h("section", { class: "card", id: `g-${group.id}`, "aria-labelledby": `gt-${group.id}` },
+    h("h2", { id: `gt-${group.id}`, text: group.title }),
+    rows.map(fieldRow));
+  if (group.action) {
+    const out = h("p", { class: "result", hidden: true, role: "status" });
+    const btn = h("button", { class: "btn primary", type: "button", text: group.action.label, onclick: async () => {
+      const yes = await ask({ title: `${group.action.label}?`, body: group.action.confirm, yes: "Yes, point it here" });
+      if (yes) runCheck(btn, out, `/api/twilio/${group.action.id}`, "Asking Twilio…");
+    } });
+    card.append(h("div", { class: "action" }, btn, out));
+  }
+  return card;
+}
+
+function render() {
+  rowEls.clear();
+  const ready = data.checklist.ready;
+  $("mc").href = ready ? "/v2" : "/v2?skip-setup=1";
+  $("mc").querySelector(".mc-label").textContent = ready ? "Mission Control" : "Skip to Mission Control";
+  $("mc").setAttribute("aria-label", ready ? "Mission Control" : "Skip to Mission Control");
+  const missingBy = {};
+  for (const i of data.checklist.items) if (!i.done) { const g = rowOf(i.key)?.group; if (g) missingBy[g] = (missingBy[g] ?? 0) + 1; }
+  $("nav").replaceChildren(
+    h("a", { href: "#setup" }, "Setup", ready ? null : h("i", { title: "Steps left", text: String(data.checklist.items.filter((i) => !i.done).length) })),
+    ...data.groups.map((g) => h("a", { href: `#g-${g.id}` }, g.title, missingBy[g.id] ? h("i", { title: "Setup steps here", text: String(missingBy[g.id]) }) : null)));
+  $("main").replaceChildren(setupCard(), ...data.groups.map(groupCard));
+  observeNav();
+  refresh();
+}
+
+function refresh() {
+  for (const [key, { el, made, err }] of rowEls) {
+    const row = rowOf(key);
+    el.hidden = !visible(row);
+    el.classList.toggle("changed", pending.has(key) || clears.has(key));
+    el.classList.toggle("err", Boolean(errors[key]));
+    err.hidden = !errors[key];
+    err.textContent = errors[key] ?? "";
+    const input = el.querySelector(`#f-${key}`);
+    if (input && "setAttribute" in input) {
+      if (errors[key]) { input.setAttribute("aria-invalid", "true"); input.setAttribute("aria-errormessage", `e-${key}`); }
+      else { input.removeAttribute("aria-invalid"); input.removeAttribute("aria-errormessage"); }
+    }
+    if (made.sync && row.type === "secret") {
+      const focused = el.contains(document.activeElement) && document.activeElement.tagName === "INPUT";
+      if (!focused) made.sync();
+    }
+  }
+  const n = dirtyCount();
+  const errCount = Object.keys(errors).length;
+  $("bar").hidden = n === 0 && errCount === 0;
+  const msg = $("bar-msg");
+  msg.className = errCount ? "bad" : "";
+  msg.textContent = errCount ? `Fix ${errCount === 1 ? "the highlighted field" : `the ${errCount} highlighted fields`}, then save.`
+    : `${n} unsaved ${n === 1 ? "change" : "changes"}`;
+  $("save").disabled = n === 0;
+}
+
+let navObserver;
+function observeNav() {
+  navObserver?.disconnect();
+  const links = new Map([...$("nav").querySelectorAll("a")].map((a) => [a.getAttribute("href").slice(1), a]));
+  navObserver = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) {
+      for (const a of links.values()) a.classList.remove("on");
+      const a = links.get(e.target.id);
+      if (a) { a.classList.add("on"); $("nav").scrollTo({ left: a.offsetLeft - 16 }); }
+    }
+  }, { rootMargin: "-30% 0px -60% 0px" });
+  for (const id of links.keys()) { const el = $(id); if (el) navObserver.observe(el); }
+}
+
+/* ---------- load and save ---------- */
+async function load() {
+  const res = await fetch("/api/settings", { cache: "no-store" });
+  if (res.status === 401) { $("main").replaceChildren(h("p", { class: "loading", text: "Sign in first: open this page with ?token= followed by your dashboard password." })); return; }
+  if (!res.ok) { $("main").replaceChildren(h("p", { class: "loading", text: `Could not load settings (error ${res.status}).` })); return; }
+  data = await res.json();
+  render();
+}
+
+let saving = false;
+async function save() {
+  if (saving) return false;
+  saving = true;
+  $("save").disabled = true;
+  $("save").textContent = "Saving…";
+  const restartChanged = [...pending.keys()].some((k) => rowOf(k)?.restart);
+  try {
+    const res = await fetch("/api/settings", { method: "PUT", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ values: Object.fromEntries(pending), clear: [...clears] }) });
+    const r = await res.json().catch(() => ({}));
+    if (res.status === 422) {
+      errors = r.errors ?? {};
+      if (errors._) toast(errors._, "bad");
+      refresh();
+      const first = data.settings.find((s) => errors[s.key]);
+      if (first) goTo(first.key);
+      return false;
+    }
+    if (res.status === 401) { toast("You were signed out. Reload the page and sign in again.", "bad"); return false; }
+    if (!res.ok) { toast(r.error ?? `Saving failed (error ${res.status}).`, "bad"); return false; }
+    const scrollY = window.scrollY;
+    data = r;
+    pending.clear(); clears.clear(); errors = {};
+    render();
+    window.scrollTo(0, scrollY);
+    toast(restartChanged ? "Saved. Restart the server for the CRM change to take effect." : "Saved.");
+    return true;
+  } catch {
+    toast("Could not reach this server. Is it still running?", "bad");
+    return false;
+  } finally {
+    saving = false;
+    $("save").textContent = "Save";
+    refresh();
+  }
+}
+
+function discard() {
+  pending.clear(); clears.clear(); errors = {};
+  const scrollY = window.scrollY;
+  render();
+  window.scrollTo(0, scrollY);
+}
+
+$("save").addEventListener("click", save);
+$("discard").addEventListener("click", discard);
+addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s" && data) { e.preventDefault(); if (dirtyCount()) save(); }
+});
+addEventListener("beforeunload", (e) => { if (dirtyCount()) { e.preventDefault(); e.returnValue = ""; } });
+
+/* ---------- theme, shared with Mission Control ---------- */
+function applyTheme(t) {
+  if (t !== "light" && t !== "dark") return;
+  document.documentElement.dataset.theme = t;
+  $("theme").replaceChildren(svg(t === "dark" ? ICON.sun : ICON.moon));
+}
+applyTheme(matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+try { applyTheme(localStorage.getItem("mc-theme")); } catch {}
+applyTheme(new URLSearchParams(location.search).get("theme"));
+$("theme").addEventListener("click", () => {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  applyTheme(next);
+  try { localStorage.setItem("mc-theme", next); } catch {}
+});
+
+load().catch(() => $("main").replaceChildren(h("p", { class: "loading", text: "Could not reach this server. Is it still running?" })));
+// Web fonts after load, so a hanging font request never holds the page; the system stack covers it.
+addEventListener("load", () => document.head.append(h("link", { rel: "stylesheet", href: FONT_CSS })), { once: true });
+</script>
+</body>
+</html>
