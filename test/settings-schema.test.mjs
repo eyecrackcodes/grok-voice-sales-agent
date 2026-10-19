@@ -38,3 +38,10 @@ test("config reads settings live, falls back to the table's defaults, and a blan
     delete process.env.INBOUND_MAX_PER_DAY;
   }
 });
+
+test(".env.example is generated from the settings table and is up to date", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { renderEnvExample } = await import("../scripts/env-example.mjs");
+  const onDisk = readFileSync(new URL("../.env.example", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+  assert.equal(onDisk, renderEnvExample(), "run npm run env-example");
+});

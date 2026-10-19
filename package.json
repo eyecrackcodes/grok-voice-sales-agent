@@ -12,7 +12,8 @@
     "start": "node src/server.mjs",
     "test": "node --test test/",
     "sim": "node scripts/simulate.mjs",
-    "diagrams": "node scripts/render-diagrams.mjs"
+    "diagrams": "node scripts/render-diagrams.mjs",
+    "env-example": "node scripts/env-example.mjs"
   },
   "dependencies": {
     "ws": "^8.22.0"
