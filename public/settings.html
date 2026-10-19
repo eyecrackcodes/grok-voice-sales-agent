@@ -314,14 +314,16 @@ function secretControl(row) {
 function boolControl(row) {
   const input = h("input", { id: `f-${row.key}`, type: "checkbox", role: "switch", checked: row.value === "true", disabled: row.locked, "aria-describedby": `d-${row.key}` });
   const state = h("span", { text: input.checked ? "On" : "Off" });
-  input.addEventListener("change", async () => {
-    if (row.danger && input.checked) {
-      const yes = await ask({ title: `Turn on "${row.label}"?`, body: row.help ?? "This changes how the bot behaves on real calls.", yes: "Turn it on" });
-      if (!yes) { input.checked = false; return; }
-    }
-    state.textContent = input.checked ? "On" : "Off";
-    setValue(row, String(input.checked));
+  const commit = () => { state.textContent = input.checked ? "On" : "Off"; setValue(row, String(input.checked)); };
+  // Hold a danger switch at Off until the person confirms, so it never looks on while they decide.
+  input.addEventListener("click", async (e) => {
+    if (!row.danger || !input.checked) return;
+    e.preventDefault();
+    const yes = await ask({ title: `Turn on "${row.label}"?`, body: row.help ?? "This changes how the bot behaves on real calls.", yes: "Turn it on" });
+    if (yes) { input.checked = true; commit(); }
+    input.focus();
   });
+  input.addEventListener("change", commit);
   return { ctl: h("label", { class: "switch" }, input, state, h("span", { class: "sr", text: row.label })),
     reset: () => { input.checked = row.value === "true"; state.textContent = input.checked ? "On" : "Off"; } };
 }
