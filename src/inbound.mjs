@@ -16,8 +16,9 @@ export const RECENT_LEAD_MINUTES = 30;
 let store = null;
 const days = () => (store ??= existsSync(STORE) ? JSON.parse(readFileSync(STORE, "utf8")) : { days: {} }).days;
 
-// callId -> when it was claimed. A call that never connects its stream would hold a slot
-// forever, so a claim older than the longest allowed call (plus a margin) is dropped.
+// callId -> { at, started }. A call that never connects its stream would hold a slot, so an
+// unstarted claim is dropped after UNSTARTED_CLAIM_MS and a started one after the longest allowed call.
+export const UNSTARTED_CLAIM_MS = 45000;
 const active = new Map();
 // Callers the bot has had lately. If a transfer sends the caller straight back here, they
 // go to the fallback instead of starting over with the bot.
@@ -39,21 +40,23 @@ export function decide({ enabled, maxActive, maxPerDay, hours: [start, end], act
 
 function sweep(now) {
   const staleAfter = ((config.maxCallMinutes ?? 20) + 5) * 60000;
-  for (const [id, at] of active) if (now.getTime() - at > staleAfter) active.delete(id);
+  for (const [id, c] of active) if (now.getTime() - c.at > (c.started ? staleAfter : UNSTARTED_CLAIM_MS)) active.delete(id);
   for (const [phone, at] of recent) if (now.getTime() - at > LOOP_WINDOW_MS) recent.delete(phone);
 }
 
 export function route(from, now = new Date()) {
   sweep(now);
   const c = config.inbound, caller = tenDigits(from), ours = tenDigits(process.env.TWILIO_PHONE_NUMBER);
-  const looped = (ours !== "" && caller === ours) || recent.has(caller);
+  // No caller ID ("anonymous", empty) is never a loop: every such caller would look like the same one.
+  const looped = caller !== "" && ((ours !== "" && caller === ours) || recent.has(caller));
   return decide({ enabled: c.enabled, maxActive: c.maxActive, maxPerDay: c.maxPerDay, hours: c.hours,
     activeCount: active.size, todayCount: days()[dayKey(now, c.tz)] ?? 0, hour: hourIn(now, c.tz), looped });
 }
 
 export function claim(callId, from, now = new Date()) {
-  active.set(callId, now.getTime());
-  recent.set(tenDigits(from), now.getTime());
+  active.set(callId, { at: now.getTime(), started: false });
+  const caller = tenDigits(from);
+  if (caller !== "") recent.set(caller, now.getTime());
   const day = dayKey(now, config.inbound.tz);
   const counts = days();
   const today = (counts[day] ?? 0) + 1;
@@ -63,6 +66,7 @@ export function claim(callId, from, now = new Date()) {
   writeFileSync(STORE, JSON.stringify(store));
 }
 
+export const markStarted = (callId) => { const c = active.get(callId); if (c) c.started = true; };
 export const release = (callId) => active.delete(callId);
 
 const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), ms).unref())]);

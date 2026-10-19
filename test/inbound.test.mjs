@@ -97,3 +97,24 @@ test("the fallback rings the configured number with the caller's ID, and says so
   assert.ok(fallbackTwiml({ callerId: "+15555550111" }).includes("<Number>+15555550177</Number>"));
   delete process.env.INBOUND_FALLBACK_NUMBER;
 });
+
+test("a claim whose stream never starts is released after 45 seconds, a started one holds until the longest call", () => {
+  const at = (s) => new Date(noon.getTime() + s * 1000);
+  claim("in-unstarted", "+15555550177", noon);
+  claim("in-started", "+15555550178", noon);
+  inbound.markStarted("in-started");
+  assert.match(route("+15555550199", at(44)).reason, /bot busy \(2\/\d+ active\)/);
+  assert.match(route("+15555550199", at(46)).reason, /bot busy \(1\/\d+ active\)/);
+  assert.match(route("+15555550199", at(20 * 60)).reason, /bot busy \(1\/\d+ active\)/);
+  release("in-started");
+  release("in-unstarted");
+});
+
+test("a caller with no caller ID is never recorded for the loop guard or treated as a loop", () => {
+  for (const anon of ["", "anonymous", undefined]) {
+    claim(`in-anon-${anon}`, anon, noon);
+    release(`in-anon-${anon}`);
+    assert.doesNotMatch(route(anon, noon).reason ?? "", /just with the bot/, String(anon));
+    assert.doesNotMatch(route("", noon).reason ?? "", /just with the bot/, "an earlier anonymous call must not make the next one a loop");
+  }
+});

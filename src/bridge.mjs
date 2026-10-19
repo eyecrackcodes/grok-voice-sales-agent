@@ -8,7 +8,7 @@ import { crm } from "./crm/index.mjs";
 import { transferToAgent, setRecording } from "./transfer.mjs";
 import { config } from "./config.mjs";
 import { progressTracker, serialQueue } from "./progress.mjs";
-import { release as releaseInbound, lookupCaller } from "./inbound.mjs";
+import { release as releaseInbound, markStarted as markInboundStarted, lookupCaller } from "./inbound.mjs";
 
 const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r({ timedOut: true }), ms))]);
 
@@ -96,6 +96,7 @@ export function handleTwilioStream(twilioWs, streamSecret) {
       publicBase = p.publicBase;
       callerPhone = p.callerPhone ?? "";
       const inboundCall = p.source === "inbound";
+      if (inboundCall) markInboundStarted(callId);
       session = startSession({
         callId,
         lead: { uid: leadUid, name: p.firstName, callSid, source: p.source },
