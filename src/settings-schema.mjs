@@ -2,19 +2,24 @@
 // the settings API validates against it, and config.mjs takes its defaults from it,
 // so adding a setting is one row here.
 //
-// Row: { key, group, label, type, default?, help?, required?, options?, min?, max?, when?, danger?, uiReadOnly? }
+// Row: { key, group, label, type, default?, help?, required?, options?, min?, max?, minLength?, when?, danger?, uiReadOnly?, restart?, test? }
 //   key       the environment variable name (a .env file can still set any of these)
 //   type      secret | text | textarea | number | bool | select | phone | phones | url
 //   required  needed before the bot can take or place a call (drives the setup checklist)
 //   when      { KEY: value } shows the row only when another setting has that value
 //   uiReadOnly  shown as set/unset but never edited from the page
+//   restart   a change takes effect only after the server restarts
+//   test      the connection check (POST /api/settings/test/<test>) offered next to the field
+//
+// Group: { id, title, action? }  action is a one-click server operation shown at the end of the group.
 
 export const GROUPS = [
   { id: "connect", title: "Connect your accounts" },
   { id: "business", title: "Your business" },
   { id: "calls", title: "Calls and transfers" },
   { id: "outbound", title: "Outbound calling" },
-  { id: "inbound", title: "Inbound calls" },
+  { id: "inbound", title: "Inbound calls", action: { id: "point-number", label: "Point my Twilio number at this server",
+    confirm: "Twilio will send every call to your Twilio number to this server. If the bot can't take a call, Twilio forwards it to your fallback number." } },
   { id: "crm", title: "CRM" },
   { id: "script", title: "Script" },
   { id: "advanced", title: "Advanced" },
@@ -31,11 +36,11 @@ const OPENER_TV_CALLBACK = "Hi, is this {first}? This is {bot_intro} on a record
 const OPENER_INBOUND = "Thank you for calling {company}! This is {bot_intro} on a recorded line. Who do I have the pleasure of speaking with today?";
 
 export const SETTINGS = [
-  { key: "X_API_KEY", group: "connect", label: "xAI API key", type: "secret", required: true, help: "From console.x.ai. Powers the Grok Voice calls." },
+  { key: "X_API_KEY", group: "connect", label: "xAI API key", type: "secret", required: true, help: "From console.x.ai. Powers the Grok Voice calls.", test: "xai" },
   { key: "TWILIO_ACCOUNT_SID", group: "connect", label: "Twilio Account SID", type: "secret", required: true, help: "On your Twilio console home page. Starts with AC." },
   { key: "TWILIO_AUTH_TOKEN", group: "connect", label: "Twilio Auth Token", type: "secret", required: true, help: "Next to the Account SID in the Twilio console." },
-  { key: "TWILIO_PHONE_NUMBER", group: "connect", label: "Your Twilio phone number", type: "phone", required: true, help: "Outbound calls come from this number, and inbound calls ring it." },
-  { key: "PUBLIC_BASE", group: "connect", label: "Public address of this server", type: "url", required: true, help: "The https address Twilio uses to reach this server, for example https://bot.example.com. See the README for running it on a server or through a tunnel." },
+  { key: "TWILIO_PHONE_NUMBER", group: "connect", label: "Your Twilio phone number", type: "phone", required: true, help: "Outbound calls come from this number, and inbound calls ring it.", test: "twilio" },
+  { key: "PUBLIC_BASE", group: "connect", label: "Public address of this server", type: "url", required: true, help: "The https address Twilio uses to reach this server, for example https://bot.example.com. See the README for running it on a server or through a tunnel.", test: "public" },
 
   { key: "COMPANY_NAME", group: "business", label: "Company name", type: "text", default: "Acme Final Expense" },
   { key: "BOT_NAME", group: "business", label: "Bot's name", type: "text", default: "Sarah" },
@@ -82,7 +87,7 @@ export const SETTINGS = [
   { key: "CRM_PROVIDER", group: "crm", label: "CRM", type: "select", default: "none", options: [
     { value: "none", label: "No CRM (leads from data/leads.csv, results to data/outcomes.jsonl)" },
     { value: "dsb", label: "Digital Senior Benefits" },
-  ], help: "Changing this takes effect after a restart." },
+  ], restart: true, test: "crm" },
   { key: "DSB_BASE", group: "crm", label: "CRM API address", type: "url", when: { CRM_PROVIDER: "dsb" } },
   { key: "DSB_CRM_MCP", group: "crm", label: "CRM API token", type: "secret", when: { CRM_PROVIDER: "dsb" }, help: "Use a least-privilege token." },
   { key: "DSB_QUEUE_STATUS", group: "crm", label: "Status of the leads to call", type: "text", default: "55", when: { CRM_PROVIDER: "dsb" } },
@@ -95,7 +100,7 @@ export const SETTINGS = [
   { key: "SCRIPT_OPENER_INBOUND", group: "script", label: "Opener: someone calls in", type: "textarea", default: OPENER_INBOUND, help: "Placeholders: {bot} {company} {bot_intro}. Never greet an inbound caller by a name you looked up." },
   { key: "SCRIPT_EXTRA", group: "script", label: "Extra instructions for the bot", type: "textarea", default: "", help: "House rules, products, phrases to avoid. Added to the end of the bot's instructions." },
 
-  { key: "DASHBOARD_TOKEN", group: "advanced", label: "Dashboard password", type: "secret", help: "Required when this server is reachable from the internet. You'll sign in again after changing it." },
+  { key: "DASHBOARD_TOKEN", group: "advanced", label: "Dashboard password", type: "secret", minLength: 12, help: "Required when this server is reachable from the internet. At least 12 characters. This browser stays signed in when you change it." },
   { key: "VOICE_MODEL", group: "advanced", label: "Voice model", type: "text", default: "grok-voice-3.0" },
   { key: "PRACTICE_MAX_ACTIVE", group: "advanced", label: "Practice calls at once", type: "number", default: 2, min: 1, max: 5, help: "Each practice call spends real xAI credit." },
   { key: "RATE_TABLE", group: "advanced", label: "Rate table file", type: "text", default: "src/rates/sample-level-plan.json", help: "The shipped table is SAMPLE DATA, not real rates. Schema in the README." },

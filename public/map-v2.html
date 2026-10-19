@@ -71,6 +71,7 @@ button { font-family: inherit; }
 #pick { appearance: none; background: var(--panel-hi) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238590a5' fill='none' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right .7rem center; color: var(--text); border: 1px solid var(--line2); border-radius: 9px; padding: .42rem 2rem .42rem .7rem; font: 500 .9rem var(--sans); width: clamp(15rem, 22vw, 25rem); min-width: 0; }
 #pick option { background: var(--node); color: var(--text); }
 .btn { background: transparent; border: 1px solid var(--line2); color: var(--muted); border-radius: 9px; padding: .4rem .7rem; font: 600 max(.78rem, 12px) var(--sans); letter-spacing: .03em; cursor: pointer; white-space: nowrap; }
+a.btn { text-decoration: none; }
 .btn.on { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, transparent); background: color-mix(in srgb, var(--good) 8%, transparent); }
 .btn.icon { padding: .35rem .45rem; display: grid; place-items: center; }
 .btn.icon svg { width: 1.05rem; height: 1.05rem; }
@@ -459,7 +460,7 @@ main { display: grid; grid-template-columns: clamp(270px, 21vw, 410px) minmax(0,
 <header class="top">
   <div class="brand">
     <svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="bm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fb923c"/><stop offset="1" stop-color="#7aa2ff"/></linearGradient></defs><rect x="1" y="1" width="30" height="30" rx="8" fill="none" stroke="url(#bm)" stroke-width="2"/><path d="M8 21 L13 13 L18 18 L24 9" fill="none" stroke="url(#bm)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="24" cy="9" r="2.6" fill="#fb923c"/></svg>
-    <div><b>Mission Control</b><small>Sarah · outbound final expense</small></div>
+    <div><b>Mission Control</b><small>Sarah · <span id="direction">outbound</span> final expense</small></div>
   </div>
   <div class="sep"></div>
   <div class="picker">
@@ -472,6 +473,7 @@ main { display: grid; grid-template-columns: clamp(270px, 21vw, 410px) minmax(0,
     <div class="hud-i" title="Each objection after price that is not overcome costs a heart"><div class="hearts" id="hearts"></div><span class="hud-cap" id="hearts-cap">Hearts</span></div>
     <div class="hud-i"><b id="score" class="mono">–</b><span class="delta" id="delta"></span><small>Score</small></div>
     <div class="hud-i"><b id="timer" class="mono">–</b><small>Call time</small></div>
+    <a id="settings" class="btn icon" href="/settings" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></a>
     <button id="theme" class="btn icon" type="button" title="Switch light or dark theme" aria-label="Switch theme"></button>
   </div>
 </header>
@@ -1844,6 +1846,7 @@ function paintAll(s, animate) {
   }
   if (!s) { resetBoard(); shown = { id: null, trailLen: 0, badges: [], score: 0, lives: null, trId: null }; }
   shown.stale = s ? isStale(s) : false;
+  $("direction").textContent = s?.lead?.source === "inbound" ? "inbound" : "outbound";
   if (s) paintBoard(s, animate);
   paintStatus(s); paintHud(s); paintNba(s); paintRules(s); paintBadges(s);
   paintTranscript(s); paintWords(s); paintCase(s); paintLadder(s); paintTimeline(s); paintFile(s);
