@@ -23,3 +23,10 @@ test("clearing an opener goes back to the default, which already says the call i
     assert.deepEqual(check({ [key]: "" }).errors, {});
   }
 });
+
+test("the Settings page only accepts a relative .json path inside the project for the rate table", () => {
+  for (const bad of ["/etc/passwd", "C:\\rates.json", "\\\\host\\share\\r.json", "../rates.json", "src/../../r.json", "src\\..\\r.json", "src/rates/table.txt", "src/rates"])
+    assert.ok(check({ RATE_TABLE: bad }).errors.RATE_TABLE, bad);
+  for (const good of ["src/rates/sample-level-plan.json", "data/my-rates.JSON"])
+    assert.deepEqual(check({ RATE_TABLE: good }).errors, {}, good);
+});

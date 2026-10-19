@@ -1,5 +1,6 @@
 // Checks a partial settings update against the schema. Input is untrusted (it comes
 // from the Settings page); output is ready for store.save().
+import { isAbsolute } from "node:path";
 import { settingFor } from "./settings-schema.mjs";
 import { toE164, isLoopbackHost, config } from "./config.mjs";
 
@@ -41,6 +42,11 @@ const CHECKS = {
   SCRIPT_OPENER_REQUESTED_INFO: (v) => recordingNotice(v),
   SCRIPT_OPENER_TV_CALLBACK: (v) => recordingNotice(v),
   SCRIPT_OPENER_INBOUND: (v) => recordingNotice(v),
+  RATE_TABLE: (v) => {
+    // The server reads this file, so the page may only point inside the project. .env can still set anything.
+    if (isAbsolute(v) || /^([a-z]:|[\\/])/i.test(v) || v.split(/[\\/]/).includes("..") || !/\.json$/i.test(v))
+      fail("Use a path inside the project that ends in .json, like src/rates/my-rates.json.");
+  },
 };
 function recordingNotice(v) {
   if (!/recorded/i.test(v)) fail("Calls are recorded, so the opener must say so. Include the word \"recorded\", for example \"this call is recorded\".");
