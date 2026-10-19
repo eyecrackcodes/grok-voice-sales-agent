@@ -13,6 +13,8 @@ import * as dialer from "./dialer.mjs";
 import { config, isLoopbackHost, warnConsentOnce } from "./config.mjs";
 import { validTwilioSignature } from "./twilio-signature.mjs";
 import { authorize } from "./dashboard-auth.mjs";
+import { settings } from "./settings.mjs";
+import { createSettingsRoutes } from "./settings-routes.mjs";
 
 const PORT = config.port;
 const HOST = config.host;
@@ -21,6 +23,9 @@ if (!isLoopbackHost(HOST) && !config.dashboardToken) {
     + "Set DASHBOARD_TOKEN to a long random string, or leave HOST at 127.0.0.1.");
   process.exit(1);
 }
+if (settings.ensureVaultKey()) console.log(`[settings] Created VAULT_KEY in ${settings.file}. Back that file up: losing the key makes saved SSN and bank details unreadable.`);
+const settingsRoutes = createSettingsRoutes({ publicBase: dialer.publicBase });
+
 const MAP_HTML = fileURLToPath(new URL("../public/map.html", import.meta.url));
 const MAP_V2_HTML = fileURLToPath(new URL("../public/map-v2.html", import.meta.url));
 const FLOW = { LANES, STAGES, UNIVERSAL_EXITS, FACTS, OBJECTION_LIMIT, HANDOFF_REQUIRES };
@@ -104,6 +109,8 @@ async function twilioRoute(req, res, url) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
   if (url.pathname === "/twiml/whisper" || url.pathname === "/twilio/amd") return twilioRoute(req, res, url).catch(() => { if (!res.headersSent) { res.writeHead(500); res.end(); } });
+  // Public on purpose: the Settings page fetches it through PUBLIC_BASE to prove Twilio can reach this server.
+  if (req.method === "GET" && url.pathname === "/healthz") return json(res, 200, { ok: true });
   if (viaTunnel(req)) return json(res, 404, { ok: false });
   const access = authorize(req, url, config.dashboardToken);
   if (!access.ok) return json(res, access.status, { ok: false, error: access.status === 401 ? "Dashboard token required" : "Forbidden" });
@@ -111,6 +118,7 @@ const server = http.createServer(async (req, res) => {
   const { pathname } = url;
   const parts = pathname.split("/").filter(Boolean);
   try {
+    if (await settingsRoutes(req, res, url)) return;
     if (req.method === "GET" && pathname === "/") {
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       return res.end(await readFile(MAP_HTML));
@@ -169,8 +177,9 @@ server.on("error", (err) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`Mission Control on http://${HOST.includes(":") ? `[${HOST}]` : HOST}:${PORT}/v2${config.dashboardToken ? " (token required)" : ""}`);
-  const missing = ["X_API_KEY", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER", "VAULT_KEY"].filter((k) => !process.env[k]);
-  if (missing.length) console.warn(`Missing from .env: ${missing.join(", ")}. The dashboard works, but calls need these. See .env.example.`);
+  console.log(`Settings on http://${HOST.includes(":") ? `[${HOST}]` : HOST}:${PORT}/settings`);
+  const missing = ["X_API_KEY", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"].filter((k) => !process.env[k]);
+  if (missing.length) console.warn(`Not set yet: ${missing.join(", ")}. The dashboard works, but calls need these. Add them on the Settings page.`);
   if (!config.consentConfirmed) console.log(`Demo mode: only numbers in DIAL_ALLOWLIST can be dialed (${config.dialAllowlist.length} listed).`);
   warnConsentOnce();
 });
