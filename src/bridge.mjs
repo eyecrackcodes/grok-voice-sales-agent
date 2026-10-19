@@ -7,6 +7,7 @@ import { getState } from "./hub.mjs";
 import { crm } from "./crm/index.mjs";
 import { transferToAgent, setRecording } from "./transfer.mjs";
 import { config } from "./config.mjs";
+import { progressTracker, serialQueue } from "./progress.mjs";
 import { release as releaseInbound, lookupCaller } from "./inbound.mjs";
 
 const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r({ timedOut: true }), ms))]);
@@ -14,6 +15,19 @@ const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(()
 export function handleTwilioStream(twilioWs, streamSecret) {
   let streamSid, callSid, callId, leadUid, publicBase, session, crmWrite = null, transferred = false, synced = false, callerPhone = "";
   let stopped = false, endRequested = false;
+  const progress = progressTracker();
+  // Every CRM write for the call runs on this queue, so the handoff always lands after an in-flight progress write.
+  const crmQueue = serialQueue();
+
+  function writeProgress(stage) {
+    if (!stage) return;
+    crmQueue(async () => {
+      if (crmWrite) return;
+      try { log("crm progress written", JSON.stringify(await crm.writeProgress({ lead: await leadFor(leadUid), state: getState(callId), stage }))); }
+      catch (e) { log("crm progress failed", e.message); }
+    });
+  }
+
   const log = (...a) => console.log(`[${callId ?? "?"}]`, ...a);
   const toTwilio = (msg) => twilioWs.readyState === WebSocket.OPEN && twilioWs.send(JSON.stringify(msg));
 
@@ -29,7 +43,7 @@ export function handleTwilioStream(twilioWs, streamSecret) {
       await new Promise((r) => setTimeout(r, wait).unref());
       if (leadUid || stopped) return;
       const lead = await lookupCaller(callerPhone);
-      if (lead) { leadUid = lead.id; return log("crm lead found mid-call"); }
+      if (lead) { leadUid = lead.id; log("crm lead found mid-call"); return writeProgress(progress.leadFound()); }
     }
     log("no crm lead found for this caller");
   }
@@ -41,8 +55,7 @@ export function handleTwilioStream(twilioWs, streamSecret) {
   function startCrmWrite() {
     if (crmWrite || !leadUid) return crmWrite;
     const state = getState(callId);
-    crmWrite = leadFor(leadUid)
-      .then((lead) => crm.writeHandoff({ lead, state, status: state.outcome === "won" ? "complete" : "transfer" }))
+    crmWrite = crmQueue(async () => crm.writeHandoff({ lead: await leadFor(leadUid), state, status: state.outcome === "won" ? "complete" : "transfer" }))
       .then((r) => { synced = true; log("crm handoff written", JSON.stringify(r)); return r; })
       .catch((e) => { log("crm handoff failed", e.message); return { error: e.message }; });
     return crmWrite;
@@ -65,8 +78,10 @@ export function handleTwilioStream(twilioWs, streamSecret) {
     synced = true;
     const state = getState(callId);
     if (!state?.outcome || state.outcome === "won" || state.outcome === "transferred") return;
-    try { log("crm outcome written", JSON.stringify(await crm.writeOutcome({ lead: await leadFor(leadUid), state }))); }
-    catch (e) { log("crm outcome failed", e.message); }
+    await crmQueue(async () => {
+      try { log("crm outcome written", JSON.stringify(await crm.writeOutcome({ lead: await leadFor(leadUid), state }))); }
+      catch (e) { log("crm outcome failed", e.message); }
+    });
   }
 
   twilioWs.on("message", (raw) => {
@@ -90,6 +105,7 @@ export function handleTwilioStream(twilioWs, streamSecret) {
           onSpeechStarted: () => toTwilio({ event: "clear", streamSid }),
           onSecure: (on) => setRecording(callSid, on).then(() => log(`recording ${on ? "paused" : "resumed"}`))
             .catch((e) => log("recording toggle failed", e.message)),
+          onStage: (stage) => writeProgress(progress.enter(stage, Boolean(leadUid))),
           onTransferRequested: startCrmWrite,
           // Marks come back once Twilio has played everything queued before them.
           onTransferReady: () => toTwilio({ event: "mark", streamSid, mark: { name: "transfer" } }),

@@ -1,10 +1,12 @@
 // Default CRM adapter: no external system. Leads come from data/leads.csv
 // (columns id, first_name, last_name, phone, state, timezone, dnc) and every
-// handoff and outcome is appended to data/outcomes.jsonl. SSN and bank details
-// are never written here, only the masked values the call state already holds.
+// handoff, outcome and mid-call progress milestone is appended to data/outcomes.jsonl.
+// SSN and bank details are never written here, only the masked values the call
+// state already holds.
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { vaultMasked } from "../vault.mjs";
+import { MILESTONES, isNameMismatch, mismatchText } from "../progress.mjs";
 
 // CRM_DATA_DIR relocates leads.csv and outcomes.jsonl (the tests use it); the example file always ships in data/.
 const DATA = process.env.CRM_DATA_DIR ? pathToFileURL(`${process.env.CRM_DATA_DIR}/`) : new URL("../../data/", import.meta.url);
@@ -84,14 +86,33 @@ function summary(lead, state) {
     lastWords: (state.transcript ?? []).slice(-6).map((t) => ({ speaker: t.speaker, text: scrub(t.text) })) };
 }
 
+// An inbound caller-ID match can be someone else's lead; then the file gets a note and no record.
+function nameGuard(lead, state) {
+  if (!isNameMismatch(state, lead.first_name)) return null;
+  append({ type: "note", leadId: lead.id, callId: state.callId, text: mismatchText(state, lead.first_name) });
+  return { file: "data/outcomes.jsonl", nameMismatch: true };
+}
+
 export async function writeHandoff({ lead, state, status }) {
+  const guarded = nameGuard(lead, state);
+  if (guarded) return { ...guarded, status };
   append({ type: "handoff", status, ...summary(lead, state) });
   return { file: "data/outcomes.jsonl", status };
 }
 
 export async function writeOutcome({ lead, state }) {
+  const guarded = nameGuard(lead, state);
+  if (guarded) return guarded;
   append({ type: "outcome", ...summary(lead, state) });
   return { file: "data/outcomes.jsonl" };
+}
+
+// A milestone reached mid-call (see MILESTONES in src/progress.mjs). Never changes anything about the lead.
+export async function writeProgress({ lead, state, stage }) {
+  const guarded = nameGuard(lead, state);
+  if (guarded) return { ...guarded, stage };
+  append({ type: "progress", ...summary(lead, state), milestone: stage, label: MILESTONES[stage] });
+  return { file: "data/outcomes.jsonl", stage };
 }
 
 export async function addNote(lead, text) {

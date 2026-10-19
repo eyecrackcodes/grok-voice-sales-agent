@@ -1,14 +1,17 @@
 // Optional CRM adapter for a hosted CRM with a tool-call HTTP API (Digital
 // Senior Benefits). Select it with CRM_PROVIDER=dsb. It writes a finished call
 // into the lead record so the licensed agent opens a complete application. SSN
-// goes only to the CRM's encrypted field; bank details stay in the vault, and
-// nothing sensitive is ever written to a note. Status ids and field names are
-// that CRM's own; a different CRM needs its own adapter (see src/crm/none.mjs).
+// goes only to the CRM's encrypted field and is never written mid-call. Bank
+// details stay in the vault unless CRM_BANK_IN_NOTE=true, which puts them in the
+// handoff note in plain text; otherwise the note has the bank name and last 4.
+// Status ids and field names are that CRM's own; a different CRM needs its own
+// adapter (see src/crm/none.mjs).
 // Env: DSB_BASE, DSB_CRM_MCP (use a least-privilege token), DSB_QUEUE_STATUS,
 // CRM_CARRIER_ID, CRM_PRODUCT_ID.
 import { env } from "../../scripts/env.mjs";
 import { vaultGet, vaultMasked } from "../vault.mjs";
 import { config } from "../config.mjs";
+import { MILESTONES, isNameMismatch, mismatchText } from "../progress.mjs";
 
 async function callTool(name, args = {}) {
   const res = await fetch(`${env("DSB_BASE").replace(/\/+$/, "")}/v1/tools/call`, {
@@ -60,21 +63,46 @@ function chosenOption(state) {
   return options.find((o) => said.includes(String(o.face)) || said.includes(String(o.monthly))) ?? null;
 }
 
-export function handoffNote(state, { status, masked }) {
+// The case summary shared by the handoff note and the mid-call progress notes.
+// secureLine goes after the address; only the handoff has one.
+function summaryLines(state, secureLine) {
   const f = state.facts;
   const o = chosenOption(state);
   const objections = state.objections.map((x) => `${x.kind}${x.afterPrice ? " (after price)" : ""}: ${x.resolved === true ? "overcome" : x.resolved === false ? "not overcome" : "open"}`);
   return [
-    `AI call handoff (${config.botName}, Grok Voice) - ${status === 300 ? "complete application, ready to submit" : "live transfer, agent to finish"}`,
     o ? `Plan: ${o.carrier} ${o.product}, $${o.face.toLocaleString()} face, $${o.monthly}/mo` : `Plan: ${f.chosen_option ?? "not chosen"}`,
     `Draft: ${f.draft_date ?? "?"} (SS arrives ${f.ss_deposit_day ?? "?"}) | Beneficiary: ${f.primary_beneficiary ?? "?"}`,
     `Address: ${[f.address, f.city, f.zip].filter(Boolean).join(", ") || "not captured"}${f.address_verified ? " (Census-matched)" : ""}`,
-    `SSN: ${masked.ssn ? `${masked.ssn} in encrypted SSN field` : "not captured"} | Bank: ${masked.bank ? `${masked.bank}, routing verified; full numbers on the call dashboard (encrypted, auto-deletes in 72h)` : "not captured"}`,
+    secureLine,
     `Why they're buying: protecting ${f.protecting ?? "?"}; ${f.pain ?? ""}${f.why_now ? ` | Why now: ${f.why_now}` : ""}`,
     `Health: tobacco ${f.tobacco ?? "?"}; ${f.height ?? "?"}, ${f.weight ?? "?"}; meds ${f.medications ?? "none"}; ${f.health_conditions ?? ""}`,
     objections.length ? `Objections: ${objections.join("; ")}` : "Objections: none",
+  ].filter(Boolean);
+}
+
+// Full numbers only when the owner chose to keep them in the CRM note; the default is what the
+// agent needs to recognize the account, not to use it.
+function bankLine(masked, bank = {}) {
+  if (!masked.bank) return "Bank: not captured";
+  if (!config.crmBankInNote || !bank.routing || !bank.account)
+    return `Bank: ${masked.bank}${masked.routingVerified ? ", routing verified" : ""}`;
+  return `Bank draft: ${bank.bank ?? "bank name not found"}${bank.accountType ? `, ${bank.accountType}` : ""} | Routing ${bank.routing} (verified) | Account ${bank.account}`;
+}
+
+export function handoffNote(state, { status, masked, bank }) {
+  return [
+    `AI call handoff (${config.botName}, Grok Voice) - ${status === 300 ? "complete application, ready to submit" : "live transfer, agent to finish"}`,
+    ...summaryLines(state, `SSN: ${masked.ssn ? `${masked.ssn} in encrypted SSN field` : "not captured"} | ${bankLine(masked, bank)}`),
     `Call ${state.callId}`,
   ].join("\n");
+}
+
+export function progressNote(state, label) {
+  return [`AI call in progress (${config.botName}): ${label}`, ...summaryLines(state), `Call ${state.callId}`].join("\n");
+}
+
+export function nameMismatchNote(state, crmFirstName) {
+  return [mismatchText(state, crmFirstName), ...summaryLines(state), `Call ${state.callId}`].join("\n");
 }
 
 async function must(name, args) {
@@ -83,19 +111,22 @@ async function must(name, args) {
   return r.data;
 }
 
-async function syncHandoff({ leadUid, state, status }) {
-  const lead = await must("leads_get", { lead_uid: leadUid });
-  const policy = [...(lead.policies ?? [])].reverse().find((p) => String(p.policy_type) === FINAL_EXPENSE);
-  if (!policy) throw new Error("Lead has no final expense policy row to fill");
-  const states = await must("states_list", {});
+// When the lead belongs to someone else, leave a note and nothing else.
+async function guardName({ leadUid, lead, state }) {
+  if (!isNameMismatch(state, lead.first_name)) return null;
+  await must("leads_add_note", { lead_uid: leadUid, note: nameMismatchNote(state, lead.first_name) });
+  return { nameMismatch: true, fieldsWritten: [], ssnWritten: false, statusChanged: false };
+}
+
+const finalExpensePolicy = (lead) => [...(lead.policies ?? [])].reverse().find((p) => String(p.policy_type) === FINAL_EXPENSE);
+
+// Everything the call has captured so far, as CRM policy fields. Never the SSN.
+export function leadFields(state, states) {
   const f = state.facts;
   const stateId = states.find((s) => s.name.toLowerCase() === stateName(f.state).toLowerCase())?.id;
   const o = chosenOption(state);
   const product = o && config.crmCarrierId && config.crmProductId ? { carrier_id: config.crmCarrierId, product_id: config.crmProductId } : null;
-  const vault = vaultGet(state.callId);
-  const masked = vaultMasked(state.callId);
-
-  const fields = Object.fromEntries(Object.entries({
+  return Object.fromEntries(Object.entries({
     first_name: f.first_name, last_name: f.last_name, date_of_birth: mdy(f.date_of_birth),
     gender: f.gender ? (/^f/i.test(f.gender) ? "Female" : "Male") : null,
     tobacco: f.tobacco == null ? null : (/^(no|false|never|non)/i.test(f.tobacco) ? "No" : "Yes"),
@@ -107,13 +138,38 @@ async function syncHandoff({ leadUid, state, status }) {
     premium_draft_date: nextDraftDate(f.draft_date) ?? nextDraftDate(f.ss_deposit_day),
     primary_beneficiary: f.primary_beneficiary ? parseBeneficiaries(f.primary_beneficiary) : null,
   }).filter(([, v]) => v != null && v !== ""));
+}
+
+async function syncHandoff({ leadUid, state, status }) {
+  const lead = await must("leads_get", { lead_uid: leadUid });
+  const mismatch = await guardName({ leadUid, lead, state });
+  if (mismatch) return { ...mismatch, status };
+  const policy = finalExpensePolicy(lead);
+  if (!policy) throw new Error("Lead has no final expense policy row to fill");
+  const vault = vaultGet(state.callId);
+  const masked = vaultMasked(state.callId);
+  const fields = leadFields(state, await must("states_list", {}));
 
   await must("leads_update", { lead_uid: leadUid, policy_id: policy.id, ...fields });
   if (vault.ssn) await must("leads_update", { lead_uid: leadUid, ssn: vault.ssn });
-  await must("leads_add_note", { lead_uid: leadUid, note: handoffNote(state, { status, masked }) });
+  await must("leads_add_note", { lead_uid: leadUid, note: handoffNote(state, { status, masked, bank: vault }) });
   const testLead = isTestLead(policy);
   if (!testLead) await must("leads_change_status", { lead_uid: leadUid, policy_id: policy.id, status });
-  return { policyId: policy.id, fieldsWritten: Object.keys(fields), ssnWritten: Boolean(vault.ssn), status, statusChanged: !testLead };
+  return { policyId: policy.id, fieldsWritten: Object.keys(fields), ssnWritten: Boolean(vault.ssn), bankInNote: config.crmBankInNote && Boolean(vault.routing && vault.account), status, statusChanged: !testLead };
+}
+
+// A mid-call write: the fields captured so far plus a note. No status change and no SSN,
+// so a call that dies here leaves the lead where it was.
+async function syncProgress({ leadUid, state, stage }) {
+  const lead = await must("leads_get", { lead_uid: leadUid });
+  const mismatch = await guardName({ leadUid, lead, state });
+  if (mismatch) return { ...mismatch, stage };
+  const policy = finalExpensePolicy(lead);
+  if (!policy) throw new Error("Lead has no final expense policy row to fill");
+  const fields = leadFields(state, await must("states_list", {}));
+  await must("leads_update", { lead_uid: leadUid, policy_id: policy.id, ...fields });
+  await must("leads_add_note", { lead_uid: leadUid, note: progressNote(state, MILESTONES[stage]) });
+  return { policyId: policy.id, stage, fieldsWritten: Object.keys(fields) };
 }
 
 // Test calls fill the record and leave a note, but never move a lead out of
@@ -125,9 +181,13 @@ const ORDINAL = { first: 1, second: 2, third: 3, fourth: 4, "1st": 1, "2nd": 2, 
 const WEEKDAY = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
 // "11/18/2026", "the 3rd", or "third Wednesday" -> the first such date at least 3 days out, as MM/DD/YYYY.
+// An exact date that has already passed is null, so the caller falls back to the deposit-day rule.
 export function nextDraftDate(text, today = new Date()) {
   const direct = mdy(text);
-  if (direct) return direct;
+  if (direct) {
+    const [m, d, y] = direct.split("/").map(Number);
+    return new Date(y, m - 1, d) >= new Date(today.getFullYear(), today.getMonth(), today.getDate()) ? direct : null;
+  }
   const s = String(text ?? "").toLowerCase();
   const earliest = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 3);
   const fmt = (d) => `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()}`;
@@ -167,7 +227,9 @@ function outcomeNote(state) {
 // Every non-handoff ending: a note, the matching status, and the DNC flag when asked.
 async function syncOutcome({ leadUid, state }) {
   const lead = await must("leads_get", { lead_uid: leadUid });
-  const policy = [...(lead.policies ?? [])].reverse().find((p) => String(p.policy_type) === FINAL_EXPENSE);
+  const mismatch = await guardName({ leadUid, lead, state });
+  if (mismatch) return { ...mismatch, status: null };
+  const policy = finalExpensePolicy(lead);
   await must("leads_add_note", { lead_uid: leadUid, note: outcomeNote(state) });
   if (state.outcome === "dnc") await must("leads_change_dnc", { lead_uid: leadUid, dnc: true });
   let status = OUTCOME_STATUS[state.outcome] ?? null;
@@ -222,4 +284,5 @@ export async function getLead(id) {
 // status: "complete" (application finished, ready to submit) or "transfer" (agent finishes).
 export const writeHandoff = ({ lead, state, status }) => syncHandoff({ leadUid: lead.id, state, status: status === "complete" ? 300 : 290 });
 export const writeOutcome = ({ lead, state }) => syncOutcome({ leadUid: lead.id, state });
+export const writeProgress = ({ lead, state, stage }) => syncProgress({ leadUid: lead.id, state, stage });
 export const addNote = (lead, text) => must("leads_add_note", { lead_uid: lead.id, note: text });
