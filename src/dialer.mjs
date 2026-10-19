@@ -12,14 +12,7 @@ const DATA_DIR = new URL("../data/", import.meta.url);
 const STORE = new URL("../data/dialer.json", import.meta.url);
 const TERMINAL = new Set(["completed", "no-answer", "busy", "failed", "canceled"]);
 
-export const config = {
-  source: process.env.DIALER_SOURCE ?? "tv_callback",
-  lines: Number(process.env.DIALER_LINES ?? 1),
-  maxAttempts: Number(process.env.DIALER_MAX_ATTEMPTS ?? 3),
-  gapMinutes: Number(process.env.DIALER_GAP_MINUTES ?? 120),
-  windowStart: 9, windowEnd: 20,                       // lead's local time, 9 AM to 8 PM
-  maxCallsPerDay: Number(process.env.DIALER_MAX_CALLS_PER_DAY ?? 25),
-};
+export const config = app.dialer;
 
 mkdirSync(DATA_DIR, { recursive: true });
 const store = existsSync(STORE) ? JSON.parse(readFileSync(STORE, "utf8")) : { attempts: {} };

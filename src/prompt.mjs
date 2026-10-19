@@ -9,8 +9,8 @@ const OPENERS = {
 };
 
 export function instructions({ firstName, state, agentName = config.agentName, source = "requested_info" }) {
-  const agentLic = agentIsNamed ? `${agentName}, a licensed agent,` : "a licensed agent";
-  const agentRef = agentIsNamed ? `${agentName}, your licensed agent,` : "your licensed agent";
+  const agentLic = agentIsNamed() ? `${agentName}, a licensed agent,` : "a licensed agent";
+  const agentRef = agentIsNamed() ? `${agentName}, your licensed agent,` : "your licensed agent";
   const name = firstName ?? "the prospect";
   const opener = (OPENERS[source] ?? OPENERS.requested_info)(firstName || "<name>");
   return `You are ${config.botName}, a virtual assistant calling for ${config.companyName} about the final expense life insurance information ${name} requested. You are on a recorded line. The prospect is a senior in ${state ?? "their state"}.

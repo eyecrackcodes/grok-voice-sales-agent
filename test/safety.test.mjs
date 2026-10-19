@@ -17,7 +17,7 @@ test("demo mode refuses numbers off the allowlist, logs why, and allows listed o
 });
 
 test("with CONSENT_CONFIRMED the allowlist is off and the responsibility warning is logged exactly once", () => {
-  config.consentConfirmed = true;
+  process.env.CONSENT_CONFIRMED = "true";
   const warnings = [];
   const original = console.warn;
   console.warn = (m) => warnings.push(m);
@@ -27,7 +27,7 @@ test("with CONSENT_CONFIRMED the allowlist is off and the responsibility warning
     warnConsentOnce();
   } finally {
     console.warn = original;
-    config.consentConfirmed = false;
+    delete process.env.CONSENT_CONFIRMED;
   }
   assert.equal(warnings.length, 1);
   assert.match(warnings[0], /TCPA/);
