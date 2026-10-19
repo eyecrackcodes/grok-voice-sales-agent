@@ -3,8 +3,10 @@
 //   getLead(id)                           -> Lead | null
 //   writeHandoff({ lead, state, status }) -> result  (status "complete" | "transfer")
 //   writeOutcome({ lead, state })         -> result  (any ending that is not a handoff)
+//   writeProgress({ lead, state, stage }) -> result  (a milestone mid-call; never a status change or SSN)
 //   addNote(lead, text)                   -> void
-// Lead = { id, first_name, last_name, phone, state, timezone, dnc }
+//   findByPhone(phone, { recentMinutes }) -> Lead | null  (inbound caller lookup; with recentMinutes, only a lead created that recently)
+// Lead = { id, first_name, last_name, phone, state, timezone, dnc, created_at? }
 import { config } from "../config.mjs";
 
 const ADAPTERS = {

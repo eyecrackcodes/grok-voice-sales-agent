@@ -1,10 +1,12 @@
 // Default CRM adapter: no external system. Leads come from data/leads.csv
 // (columns id, first_name, last_name, phone, state, timezone, dnc) and every
-// handoff and outcome is appended to data/outcomes.jsonl. SSN and bank details
-// are never written here, only the masked values the call state already holds.
+// handoff, outcome and mid-call progress milestone is appended to data/outcomes.jsonl.
+// SSN and bank details are never written here, only the masked values the call
+// state already holds.
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { vaultMasked } from "../vault.mjs";
+import { MILESTONES, isNameMismatch, mismatchText } from "../progress.mjs";
 
 // CRM_DATA_DIR relocates leads.csv and outcomes.jsonl (the tests use it); the example file always ships in data/.
 const DATA = process.env.CRM_DATA_DIR ? pathToFileURL(`${process.env.CRM_DATA_DIR}/`) : new URL("../../data/", import.meta.url);
@@ -50,11 +52,22 @@ function loadLeads() {
   // Someone who asked not to be called stays blocked even if the CSV row says otherwise.
   const dnc = new Set(readOutcomes().filter((o) => o.type === "outcome" && o.outcome === "dnc").map((o) => o.leadId));
   return parseCsv(readFileSync(LEADS, "utf8")).filter((r) => r.id)
-    .map((r) => ({ id: r.id, first_name: r.first_name, last_name: r.last_name, phone: r.phone, state: r.state, timezone: r.timezone, dnc: truthy(r.dnc) || dnc.has(r.id) }));
+    .map((r) => ({ id: r.id, first_name: r.first_name, last_name: r.last_name, phone: r.phone, state: r.state, timezone: r.timezone, dnc: truthy(r.dnc) || dnc.has(r.id), created_at: r.created_at || "" }));
 }
 
 export async function listQueue() { return loadLeads(); }
 export async function getLead(id) { return loadLeads().find((l) => l.id === id) ?? null; }
+
+const tenDigits = (n) => String(n ?? "").replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
+
+// With recentMinutes, only a lead whose optional created_at column (any date Date.parse reads) is that recent.
+export async function findByPhone(phone, { recentMinutes } = {}) {
+  const want = tenDigits(phone);
+  if (want.length !== 10) return null;
+  const at = (l) => Date.parse(l.created_at);
+  const hits = loadLeads().filter((l) => tenDigits(l.phone) === want && (!recentMinutes || (Date.now() - at(l) <= recentMinutes * 60000 && Date.now() - at(l) >= -60000)));
+  return hits.sort((a, b) => (at(b) || 0) - (at(a) || 0))[0] ?? null;
+}
 
 // Free-text facts are already digit-masked by the session; this is the second line of defense.
 const scrub = (v) => (typeof v === "string" ? v.replace(/\d(?:[\s-]?\d){6,}/g, "[#]") : v);
@@ -73,14 +86,33 @@ function summary(lead, state) {
     lastWords: (state.transcript ?? []).slice(-6).map((t) => ({ speaker: t.speaker, text: scrub(t.text) })) };
 }
 
+// An inbound caller-ID match can be someone else's lead; then the file gets a note and no record.
+function nameGuard(lead, state) {
+  if (!isNameMismatch(state, lead.first_name)) return null;
+  append({ type: "note", leadId: lead.id, callId: state.callId, text: mismatchText(state, lead.first_name) });
+  return { file: "data/outcomes.jsonl", nameMismatch: true };
+}
+
 export async function writeHandoff({ lead, state, status }) {
+  const guarded = nameGuard(lead, state);
+  if (guarded) return { ...guarded, status };
   append({ type: "handoff", status, ...summary(lead, state) });
   return { file: "data/outcomes.jsonl", status };
 }
 
 export async function writeOutcome({ lead, state }) {
+  const guarded = nameGuard(lead, state);
+  if (guarded) return guarded;
   append({ type: "outcome", ...summary(lead, state) });
   return { file: "data/outcomes.jsonl" };
+}
+
+// A milestone reached mid-call (see MILESTONES in src/progress.mjs). Never changes anything about the lead.
+export async function writeProgress({ lead, state, stage }) {
+  const guarded = nameGuard(lead, state);
+  if (guarded) return { ...guarded, stage };
+  append({ type: "progress", ...summary(lead, state), milestone: stage, label: MILESTONES[stage] });
+  return { file: "data/outcomes.jsonl", stage };
 }
 
 export async function addNote(lead, text) {

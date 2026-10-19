@@ -1,4 +1,4 @@
-import { STAGES, FACTS, HANDOFF_REQUIRES, OBJECTION_LIMIT, canTransition, isTerminal } from "./flow.mjs";
+import { STAGES, FACTS, HANDOFF_REQUIRES, OBJECTION_LIMIT, canTransition, isTerminal, UNIVERSAL_EXITS } from "./flow.mjs";
 
 const TRANSCRIPT_CAP = 50;
 const ACTION = { price: "present price", handoff: "hand off" };
@@ -43,7 +43,7 @@ export function validate(state, event) {
       const to = event.to;
       if (!STAGES[to]) return `Unknown stage "${to}"`;
       if (!canTransition(state.stage, to)) {
-        const allowed = [...STAGES[state.stage].next, "dnc", "hangup"].join(", ");
+        const allowed = [...new Set([...STAGES[state.stage].next, ...UNIVERSAL_EXITS])].join(", ");
         return `Can't go from ${state.stage} to ${to}: from ${state.stage} you can go to ${allowed}`;
       }
       return missingRequirement(state, to);

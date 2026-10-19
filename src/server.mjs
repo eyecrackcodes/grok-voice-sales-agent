@@ -10,6 +10,7 @@ import { runRoleplay } from "./roleplay.mjs";
 import { whisperTwiml } from "./transfer.mjs";
 import { twilio } from "../scripts/twilio.mjs";
 import * as dialer from "./dialer.mjs";
+import * as inbound from "./inbound.mjs";
 import { config, isLoopbackHost, warnConsentOnce } from "./config.mjs";
 import { validTwilioSignature } from "./twilio-signature.mjs";
 import { authorize } from "./dashboard-auth.mjs";
@@ -106,8 +107,36 @@ async function twilioRoute(req, res, url) {
   res.end();
 }
 
+// ---- inbound calls: Twilio posts here when someone calls the Twilio number ----
+// The path is fixed in the Twilio console, so there is no per-call secret to check; the signature
+// is the gate. The caller is looked up so the CRM write lands on their lead, but the bot is never
+// told the looked-up name: caller ID can belong to someone else, so the bot asks who is calling.
+async function inboundRoute(req, res) {
+  const form = await readForm(req);
+  if (!signedByTwilio(req, form)) { console.error("[twilio] rejected /twilio/inbound: missing or invalid X-Twilio-Signature"); res.writeHead(403); return res.end(); }
+  const xml = (body) => { res.writeHead(200, { "content-type": "text/xml" }); res.end(body); };
+  const from = form.From ?? "";
+  try {
+    const decision = inbound.route(from);
+    if (decision.to !== "bot") {
+      console.log(`[inbound] to fallback: ${decision.reason}`);
+      return xml(inbound.fallbackTwiml({ callerId: from }));
+    }
+    const callId = `in-${randomUUID().slice(0, 8)}`;
+    inbound.claim(callId, from);
+    const lead = await inbound.lookupCaller(from);
+    console.log(`[inbound] ${callId} to the bot${lead ? " (lead found)" : ""}`);
+    return xml(inbound.botTwiml({ base: dialer.publicBase(), params: {
+      secret: STREAM_SECRET, callId, leadUid: lead?.id ?? "", source: "inbound", callerPhone: from, publicBase: dialer.publicBase() } }));
+  } catch (err) {
+    console.error("[inbound] failed, sending the caller to the fallback:", err.message);
+    return xml(inbound.fallbackTwiml({ callerId: from }));
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
+  if (req.method === "POST" && url.pathname === "/twilio/inbound") return inboundRoute(req, res).catch(() => { if (!res.headersSent) { res.writeHead(500); res.end(); } });
   if (url.pathname === "/twiml/whisper" || url.pathname === "/twilio/amd") return twilioRoute(req, res, url).catch(() => { if (!res.headersSent) { res.writeHead(500); res.end(); } });
   // Public on purpose: the Settings page fetches it through PUBLIC_BASE to prove Twilio can reach this server.
   if (req.method === "GET" && url.pathname === "/healthz") return json(res, 200, { ok: true });
