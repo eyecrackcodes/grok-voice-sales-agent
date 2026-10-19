@@ -46,13 +46,21 @@ export const STAGES = {
 };
 
 // Reachable from any non-terminal stage.
-export const UNIVERSAL_EXITS = ["dnc", "hangup", "callback"];
+export const UNIVERSAL_EXITS = ["dnc", "hangup", "callback", "transferred"];
 
 export const isTerminal = (stage) => Boolean(STAGES[stage]?.terminal);
 
 export function canTransition(from, to) {
   if (!STAGES[to] || isTerminal(from)) return false;
   return UNIVERSAL_EXITS.includes(to) || STAGES[from].next.includes(to);
+}
+
+// The one stage m that lets a skipped step through: from -> m -> to. Terminal
+// stages and "objection" are never used as a bridge, since passing through them
+// would book an outcome or an objection the prospect never raised.
+export function bridgeStage(from, to) {
+  const hops = Object.keys(STAGES).filter((m) => m !== "objection" && !isTerminal(m) && canTransition(from, m) && canTransition(m, to));
+  return hops.length === 1 ? hops[0] : null;
 }
 
 // Facts the bot captures; the map shows them on the prospect card and the
@@ -94,7 +102,7 @@ export const FACTS = {
   zip: { label: "ZIP", group: "application", serverOnly: true },
   county: { label: "County", group: "application", serverOnly: true },
   address_verified: { label: "Address verified", group: "application", serverOnly: true },
-  draft_date: { label: "Draft date", group: "application" },
+  draft_date: { label: "Draft date", group: "application", serverOnly: true },
   ssn_on_file: { label: "SSN", group: "application", serverOnly: true },
   bank_on_file: { label: "Bank", group: "application", serverOnly: true },
 };
