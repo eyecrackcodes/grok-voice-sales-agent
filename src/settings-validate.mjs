@@ -36,6 +36,16 @@ const PARSE = {
   bool: (v) => (v === "true" || v === "false" ? v : fail("Choose on or off.")),
 };
 
+// Extra per-key rules applied to the parsed value.
+const CHECKS = {
+  SCRIPT_OPENER_REQUESTED_INFO: (v) => recordingNotice(v),
+  SCRIPT_OPENER_TV_CALLBACK: (v) => recordingNotice(v),
+  SCRIPT_OPENER_INBOUND: (v) => recordingNotice(v),
+};
+function recordingNotice(v) {
+  if (!/recorded/i.test(v)) fail("Calls are recorded, so the opener must say so. Include the word \"recorded\", for example \"this call is recorded\".");
+}
+
 function editable(row, key, store) {
   if (!row) return "Unknown setting.";
   if (row.uiReadOnly) return "This setting can't be changed here.";
@@ -48,7 +58,9 @@ function parse(row, input) {
   const cap = LENGTH_CAP[row.type];
   if (cap && v.length > cap) fail(`Keep this under ${cap} characters.`);
   if (row.minLength && v.length < row.minLength) fail(`Use at least ${row.minLength} characters.`);
-  return PARSE[row.type](v, row);
+  const parsed = PARSE[row.type](v, row);
+  CHECKS[row.key]?.(parsed);
+  return parsed;
 }
 
 // body: { values: { KEY: string | number | boolean }, clear: [KEY] }
