@@ -185,7 +185,27 @@ const stateNames = async () => (statesCache ??= await must("states_list", {}));
 async function normalize(l) {
   const states = await stateNames();
   return { id: l.lead_uid, first_name: l.first_name ?? "", last_name: l.last_name ?? "", phone: l.mobile || l.phone || "",
-    state: states.find((x) => String(x.id) === String(l.state))?.name ?? "", timezone: l.timezone || "", dnc: Boolean(l.dnc) };
+    state: states.find((x) => String(x.id) === String(l.state))?.name ?? "", timezone: l.timezone || "", dnc: Boolean(l.dnc), created_at: l.create_date ?? "" };
+}
+
+// The CRM stamps create_date in UTC as "2026-10-18 19:29:10".
+const createdAt = (lead) => Date.parse(`${String(lead.create_date ?? "").replace(" ", "T")}Z`);
+
+// Newest first. With recentMinutes, only leads created that recently (a minute of clock skew allowed).
+export function newestLeads(leads, { recentMinutes, now = Date.now() } = {}) {
+  return leads
+    .filter((l) => !recentMinutes || (now - createdAt(l) <= recentMinutes * 60000 && now - createdAt(l) >= -60000))
+    .sort((a, b) => (createdAt(b) || 0) - (createdAt(a) || 0));
+}
+
+export async function findByPhone(phone, { recentMinutes } = {}) {
+  const digits = String(phone ?? "").replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
+  if (digits.length !== 10) return null;
+  const r = await callTool("leads_search", { search: digits, limit: 5 });
+  if (!r.success) throw new Error(`leads_search: ${r.error}`);
+  const rows = r.data?.leads ?? r.data?.data ?? (Array.isArray(r.data) ? r.data : []);
+  const lead = newestLeads(rows, { recentMinutes })[0];
+  return lead ? normalize(lead) : null;
 }
 
 export async function listQueue() {

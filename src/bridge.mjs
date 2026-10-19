@@ -6,11 +6,14 @@ import { startSession } from "./session.mjs";
 import { getState } from "./hub.mjs";
 import { crm } from "./crm/index.mjs";
 import { transferToAgent, setRecording } from "./transfer.mjs";
+import { config } from "./config.mjs";
+import { release as releaseInbound, lookupCaller } from "./inbound.mjs";
 
 const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r({ timedOut: true }), ms))]);
 
 export function handleTwilioStream(twilioWs, streamSecret) {
   let streamSid, callSid, callId, leadUid, publicBase, session, crmWrite = null, transferred = false, synced = false, callerPhone = "";
+  let stopped = false, endRequested = false;
   const log = (...a) => console.log(`[${callId ?? "?"}]`, ...a);
   const toTwilio = (msg) => twilioWs.readyState === WebSocket.OPEN && twilioWs.send(JSON.stringify(msg));
 
@@ -18,6 +21,18 @@ export function handleTwilioStream(twilioWs, streamSecret) {
     method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ Status: "completed" }),
   }).catch((e) => log("hangup failed", e.message));
+
+  // The lead may be posted to the CRM a little after the call starts, so a caller who wasn't
+  // found at pickup is looked up again while the call goes on.
+  async function lookUpLate() {
+    for (const wait of [20000, 40000, 60000]) {
+      await new Promise((r) => setTimeout(r, wait).unref());
+      if (leadUid || stopped) return;
+      const lead = await lookupCaller(callerPhone);
+      if (lead) { leadUid = lead.id; return log("crm lead found mid-call"); }
+    }
+    log("no crm lead found for this caller");
+  }
 
   const leadFor = async (id) => (await crm.getLead(id).catch(() => null)) ?? { id };
 
@@ -33,12 +48,12 @@ export function handleTwilioStream(twilioWs, streamSecret) {
     return crmWrite;
   }
 
-  async function transferNow() {
+  async function transferNow({ agent } = {}) {
     if (transferred) return;
     transferred = true;
     await withTimeout(startCrmWrite() ?? Promise.resolve(), 8000);
     try {
-      await transferToAgent({ callSid, callId, publicBase, state: getState(callId), secret: streamSecret, callerPhone });
+      await transferToAgent({ callSid, callId, publicBase, state: getState(callId), secret: streamSecret, callerPhone, agent });
       log("transferred to agent");
     } catch (e) {
       log("transfer failed", e.message);
@@ -65,6 +80,7 @@ export function handleTwilioStream(twilioWs, streamSecret) {
       leadUid = p.leadUid || null;
       publicBase = p.publicBase;
       callerPhone = p.callerPhone ?? "";
+      const inboundCall = p.source === "inbound";
       session = startSession({
         callId,
         lead: { uid: leadUid, name: p.firstName, callSid, source: p.source },
@@ -77,9 +93,19 @@ export function handleTwilioStream(twilioWs, streamSecret) {
           onTransferRequested: startCrmWrite,
           // Marks come back once Twilio has played everything queued before them.
           onTransferReady: () => toTwilio({ event: "mark", streamSid, mark: { name: "transfer" } }),
-          onEndRequested: () => toTwilio({ event: "mark", streamSid, mark: { name: "goodbye" } }),
+          onEndRequested: () => { endRequested = true; toTwilio({ event: "mark", streamSid, mark: { name: "goodbye" } }); },
+          // An inbound caller is never left in silence: if the bot's voice fails, hand them to a person, when one is configured.
+          onVoiceClosed: () => {
+            const rescue = config.agentTransferNumber || config.inbound.fallbackNumber;
+            if (inboundCall && rescue && !stopped && !endRequested && !transferred) { log("voice lost, transferring the caller"); transferNow({ agent: rescue }); }
+          },
         },
       });
+      if (inboundCall && !leadUid && callerPhone && config.inbound.match === "recent") lookUpLate();
+      // Outbound calls are recorded from the Calls API; an inbound call has to start its recording here.
+      if (inboundCall)
+        twilio(`/Calls/${callSid}/Recordings.json`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ RecordingChannels: "dual" }) }).then(() => log("recording started")).catch((e) => log("recording start failed", e.message));
     } else if (msg.event === "media") {
       session?.appendAudio(msg.media.payload);
     } else if (msg.event === "mark" && msg.mark?.name === "goodbye") {
@@ -87,9 +113,11 @@ export function handleTwilioStream(twilioWs, streamSecret) {
     } else if (msg.event === "mark" && msg.mark?.name === "transfer") {
       transferNow();
     } else if (msg.event === "stop") {
+      stopped = true;
       session?.end(transferred ? "transferred to agent" : session.ending ? "bot ended" : "prospect hung up");
       writeOutcome();
+      releaseInbound(callId);
     }
   });
-  twilioWs.on("close", () => { session?.end("stream closed"); writeOutcome(); });
+  twilioWs.on("close", () => { stopped = true; session?.end("stream closed"); writeOutcome(); releaseInbound(callId); });
 }

@@ -50,11 +50,22 @@ function loadLeads() {
   // Someone who asked not to be called stays blocked even if the CSV row says otherwise.
   const dnc = new Set(readOutcomes().filter((o) => o.type === "outcome" && o.outcome === "dnc").map((o) => o.leadId));
   return parseCsv(readFileSync(LEADS, "utf8")).filter((r) => r.id)
-    .map((r) => ({ id: r.id, first_name: r.first_name, last_name: r.last_name, phone: r.phone, state: r.state, timezone: r.timezone, dnc: truthy(r.dnc) || dnc.has(r.id) }));
+    .map((r) => ({ id: r.id, first_name: r.first_name, last_name: r.last_name, phone: r.phone, state: r.state, timezone: r.timezone, dnc: truthy(r.dnc) || dnc.has(r.id), created_at: r.created_at || "" }));
 }
 
 export async function listQueue() { return loadLeads(); }
 export async function getLead(id) { return loadLeads().find((l) => l.id === id) ?? null; }
+
+const tenDigits = (n) => String(n ?? "").replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
+
+// With recentMinutes, only a lead whose optional created_at column (any date Date.parse reads) is that recent.
+export async function findByPhone(phone, { recentMinutes } = {}) {
+  const want = tenDigits(phone);
+  if (want.length !== 10) return null;
+  const at = (l) => Date.parse(l.created_at);
+  const hits = loadLeads().filter((l) => tenDigits(l.phone) === want && (!recentMinutes || (Date.now() - at(l) <= recentMinutes * 60000 && Date.now() - at(l) >= -60000)));
+  return hits.sort((a, b) => (at(b) || 0) - (at(a) || 0))[0] ?? null;
+}
 
 // Free-text facts are already digit-masked by the session; this is the second line of defense.
 const scrub = (v) => (typeof v === "string" ? v.replace(/\d(?:[\s-]?\d){6,}/g, "[#]") : v);
