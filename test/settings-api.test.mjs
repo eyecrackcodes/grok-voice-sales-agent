@@ -272,3 +272,66 @@ test("point-number sets the number's VoiceUrl to /twilio/inbound and the fallbac
   t.after(plain.close);
   assert.equal((await plain.call("/api/twilio/point-number", { method: "POST" })).json.set.VoiceFallbackUrl, "");
 });
+
+// Stubs placeCall so no test reaches Twilio or xAI.
+async function startCalls({ env = {}, placeCall }) {
+  const calls = [];
+  const stub = placeCall ?? (async (lead, opts) => { calls.push({ lead, opts }); return { callSid: "CA1", callId: "call-test", last4: lead.phone.slice(-4) }; });
+  const store = createSettingsStore({ file: join(mkdtempSync(join(tmpdir(), "gvsa-api-")), "settings.json"), env });
+  const handle = createSettingsRoutes({ store, placeCall: async (...a) => { if (!placeCall) return stub(...a); calls.push(a); return stub(...a); } });
+  const server = http.createServer(async (req, res) => {
+    const url = new URL(req.url, "http://localhost");
+    const access = authorize(req, url, store.get("DASHBOARD_TOKEN"));
+    if (!access.ok) { res.writeHead(access.status); return res.end(); }
+    if (!(await handle(req, res, url))) { res.writeHead(404); res.end(); }
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const post = async (body, headers = {}) => {
+    const res = await globalThis.fetch(`http://127.0.0.1:${server.address().port}/api/test-call`, {
+      method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
+    return { status: res.status, json: await res.json().catch(() => null) };
+  };
+  return { calls, post, close: () => new Promise((r) => server.close(r)) };
+}
+
+test("test call refuses a number outside DIAL_ALLOWLIST in demo mode and never calls placeCall", async (t) => {
+  const app = await startCalls({ env: { DIAL_ALLOWLIST: "+15551230001" } });
+  t.after(app.close);
+  const { json } = await app.post({ phone: "555 123 9999", name: "Sam" });
+  assert.equal(json.ok, false);
+  assert.match(json.message, /not on your test list/);
+  assert.equal(app.calls.length, 0);
+});
+
+test("test call passes a normalized number and the name to placeCall and returns the call id", async (t) => {
+  const app = await startCalls({ env: { DIAL_ALLOWLIST: "+15551230001" } });
+  t.after(app.close);
+  const { json } = await app.post({ phone: "(555) 123-0001", name: "  Sam " });
+  assert.deepEqual(json, { ok: true, callId: "call-test" });
+  assert.equal(app.calls.length, 1);
+  assert.equal(app.calls[0].lead.phone, "+15551230001");
+  assert.equal(app.calls[0].lead.first_name, "Sam");
+  assert.deepEqual(app.calls[0].opts, {}, "source is left to the dialer's configured default");
+  const named = await app.post({ phone: "5551230001", source: "requested_info" });
+  assert.equal(app.calls[1].lead.first_name, "there");
+  assert.equal(app.calls[1].opts.source, "requested_info");
+  assert.equal(named.json.ok, true);
+});
+
+test("test call returns the placeCall error as a plain message", async (t) => {
+  const app = await startCalls({ env: { DIAL_ALLOWLIST: "+15551230001" },
+    placeCall: async () => { throw new Error("No public URL: start the tunnel (data/tunnel.log) or set PUBLIC_BASE"); } });
+  t.after(app.close);
+  const { status, json } = await app.post({ phone: "+15551230001" });
+  assert.equal(status, 200);
+  assert.deepEqual(json, { ok: false, message: "No public URL: start the tunnel (data/tunnel.log) or set PUBLIC_BASE" });
+});
+
+test("test call requires the dashboard token when one is set", async (t) => {
+  const app = await startCalls({ env: { DIAL_ALLOWLIST: "+15551230001", DASHBOARD_TOKEN: "locked-token-123456" } });
+  t.after(app.close);
+  assert.equal((await app.post({ phone: "+15551230001" })).status, 401);
+  assert.equal(app.calls.length, 0);
+  const ok = await app.post({ phone: "+15551230001" }, { authorization: "Bearer locked-token-123456" });
+  assert.equal(ok.json.ok, true);
+});

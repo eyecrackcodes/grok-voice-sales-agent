@@ -71,6 +71,11 @@ nav a i { font-style: normal; min-width: 1.3rem; height: 1.3rem; padding: 0 .3re
 .card > .sub { margin: 0 0 .6rem; color: var(--muted); font-size: .9rem; }
 
 #setup.ready { border-color: color-mix(in srgb, var(--good) 45%, transparent); }
+.testcall { margin-top: .9rem; padding-top: .9rem; border-top: 1px solid var(--line); }
+.testcall h3 { margin: 0 0 .15rem; font-size: 1rem; }
+.testcall .help { margin: 0 0 .6rem; color: var(--muted); font-size: .88rem; }
+.testcall .ctl > input[name=name] { flex: 0 1 9rem; }
+.testcall .ctl > input[name=phone] { flex: 1 1 11rem; }
 .progress { height: .4rem; border-radius: 999px; background: var(--panel-hi); overflow: hidden; margin: .5rem 0 .9rem; }
 .progress span { display: block; height: 100%; background: var(--good); border-radius: inherit; transition: width .3s; }
 .checks { list-style: none; margin: 0; padding: 0; display: grid; gap: .15rem; }
@@ -409,7 +414,33 @@ function setupCard() {
       h("span", { class: "tick" }, i.done ? svg(ICON.check) : h("span", { class: "sr", text: "Not done:" })),
       h("div", {}, h("b", { text: i.label }), i.done ? h("span", { class: "sr", text: " (done)" }) : h("small", { text: i.hint })),
       i.done ? null : h("button", { class: "btn", type: "button", text: "Go there", onclick: () => goTo(i.key) })))),
+    ready ? testCallRow() : null,
     ready ? h("p", { style: "margin:.9rem 0 0" }, h("a", { class: "btn primary", href: "/v2", text: "Open Mission Control" })) : null);
+}
+
+function testCallRow() {
+  const first = (data.settings.find((s) => s.key === "DIAL_ALLOWLIST")?.value ?? "").split(/[\s,;]+/).find(Boolean) ?? "";
+  const phone = h("input", { type: "tel", name: "phone", id: "tc-phone", autocomplete: "tel", value: first, "aria-label": "Your phone number" });
+  const name = h("input", { type: "text", name: "name", id: "tc-name", autocomplete: "given-name", placeholder: "First name", "aria-label": "First name the bot uses" });
+  const out = h("p", { class: "result", hidden: true, role: "status" });
+  const btn = h("button", { class: "btn primary", type: "button", text: "Call my phone", onclick: async () => {
+    const yes = await ask({ title: "Call this number now?", body: `The bot will phone ${phone.value || "this number"} right away. Answer it to hear the call.`, yes: "Call now" });
+    if (!yes) return;
+    btn.disabled = true;
+    out.className = "result busy"; out.textContent = "Placing the call…"; out.hidden = false;
+    try {
+      const res = await fetch("/api/test-call", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ phone: phone.value, name: name.value }) });
+      const r = await res.json().catch(() => ({ ok: false, message: `The server answered ${res.status}.` }));
+      if (r.ok) { out.className = "result ok"; out.replaceChildren("Calling now. ", h("a", { href: "/v2", text: "Watch it live in Mission Control" })); }
+      else { out.className = "result bad"; out.textContent = r.message ?? r.error ?? "No answer."; }
+    } catch { out.className = "result bad"; out.textContent = "Could not reach this server. Is it still running?"; }
+    finally { btn.disabled = false; }
+  } });
+  return h("div", { class: "testcall", id: "testcall" },
+    h("h3", { text: "Place a test call" }),
+    h("p", { class: "help", text: "About $0.08 a minute for Grok Voice plus Twilio's per-minute rate." }),
+    h("div", { class: "ctl" }, phone, name, btn),
+    out);
 }
 
 function goTo(key) {

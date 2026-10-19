@@ -7,6 +7,7 @@ import { GROUPS, SETTINGS } from "./settings-schema.mjs";
 import { settings } from "./settings.mjs";
 import { validateUpdate } from "./settings-validate.mjs";
 import { sessionCookie } from "./dashboard-auth.mjs";
+import { toE164 } from "./config.mjs";
 
 const PAGE = fileURLToPath(new URL("../public/settings.html", import.meta.url));
 const TIMEOUT_MS = 10_000;
@@ -66,7 +67,8 @@ async function readJson(req) {
 
 // `fetch` is injectable so tests never reach xAI, Twilio or a CRM.
 export function createSettingsRoutes({ store = settings, fetch = globalThis.fetch, publicBase = envPublicBase,
-  loadCrm = async () => (await import("./crm/index.mjs")).crm } = {}) {
+  loadCrm = async () => (await import("./crm/index.mjs")).crm,
+  placeCall = async (...args) => (await import("./dialer.mjs")).placeCall(...args) } = {}) {
   const timed = (url, init = {}) => fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) });
   const unreachable = (who, err) => ({ ok: false, message: `Could not reach ${who}: ${err.name === "TimeoutError" ? "no answer in 10 seconds" : err.message}.` });
 
@@ -151,6 +153,28 @@ export function createSettingsRoutes({ store = settings, fetch = globalThis.fetc
     return { ok: true, message: `Calls to ${store.get("TWILIO_PHONE_NUMBER")} now come to this server${fallback ? `, and go to ${fallback} if it can't answer` : ""}.`, set };
   }
 
+  // The dialer's own gate reads the process environment. This one reads the store the page edits, so a refusal matches what the page shows.
+  const mayDial = (e164) => store.get("CONSENT_CONFIRMED") === "true"
+    || (store.get("DIAL_ALLOWLIST") ?? "").split(/[\s,;]+/).some((n) => toE164(n) === e164);
+
+  async function testCall(body) {
+    const to = toE164(body.phone);
+    if (!to) return { ok: false, message: "Enter a US phone number with 10 digits, such as 555 123 4567." };
+    if (!mayDial(to)) return { ok: false, message: "That number is not on your test list. Add it under Outbound calling as a number the bot may call while testing, save, then try again." };
+    const name = String(body.name ?? "").trim().slice(0, 40) || "there";
+    const lead = { id: `adhoc-${Date.now().toString(36)}`, first_name: name, last_name: "", phone: to, state: "", timezone: "" };
+    // Omitting source lets placeCall apply config.dialer.source.
+    const source = typeof body.source === "string" && body.source ? body.source : undefined;
+    try {
+      const { callId } = await placeCall(lead, source ? { source } : {});
+      console.log(`[settings] test call placed to ***-***-${to.slice(-4)}`);
+      return { ok: true, callId };
+    } catch (err) {
+      console.error("[settings] test call failed:", String(err.message).replace(/\+?\d[\d\s().-]{8,}\d/g, "[number]"));
+      return { ok: false, message: err.message };
+    }
+  }
+
   const payload = () => settingsPayload(store, publicBase);
 
   return async function handle(req, res, url) {
@@ -190,6 +214,10 @@ export function createSettingsRoutes({ store = settings, fetch = globalThis.fetc
       }
       if (pathname === "/api/twilio/point-number" && method === "POST") {
         send(res, 200, await pointNumber());
+        return true;
+      }
+      if (pathname === "/api/test-call" && method === "POST") {
+        send(res, 200, await testCall(await readJson(req)));
         return true;
       }
       return false;

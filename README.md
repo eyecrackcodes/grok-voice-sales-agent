@@ -65,15 +65,9 @@ These steps place one test call to your own phone. Commands work in Windows Powe
 
 4. Open http://127.0.0.1:4319/settings in your browser. The setup checklist at the top lists what is missing. Fill in your xAI API key, your Twilio Account SID, Auth Token and phone number, your own cell under **Numbers the bot may call while testing**, and a transfer number. Select **Save**, then use the **Test** buttons to check each connection. In demo mode the bot refuses every number that is not on the test list.
 
-5. When the checklist is complete, open Mission Control from the Settings page. The gear icon in its header goes back to Settings.
+5. When the checklist is complete, a **Place a test call** row appears in it. Your test number is already filled in. Add a first name, select **Call my phone** and confirm. Your phone rings. Answer, and use the link beside the button to watch the call move through the stages in Mission Control. The gear icon in its header goes back to Settings.
 
-6. In a third terminal, place the call.
-
-   ```
-   node scripts/call-lead.mjs --phone +1YOURNUMBER --name You
-   ```
-
-   Your phone rings. Answer, and watch the call move through the stages on the dashboard.
+   A call costs about $0.08 a minute for Grok Voice plus Twilio's per-minute rate. To place the same call from a terminal instead, run `node scripts/call-lead.mjs --phone +1YOURNUMBER --name You`.
 
 Settings are saved in `data/settings.json`. A `.env` file still works. Copy `.env.example` to `.env` and fill it in. A value saved on the Settings page takes priority over `.env`. A variable set in the server's own environment, for example with `docker run -e`, takes priority over both, and the Settings page shows it as locked.
 
