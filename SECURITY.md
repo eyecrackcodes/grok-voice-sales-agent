@@ -10,6 +10,8 @@ The software runs on one computer you control. Three parties can reach it: you (
 
 **Tunnel.** Anything that arrives through the Cloudflare tunnel (it carries a `cf-connecting-ip` header) can reach only three paths: `/twilio-stream`, `/twiml/whisper` and `/twilio/amd`. Everything else returns 404 on the tunnel. The two HTTP routes require a valid `X-Twilio-Signature`, computed as Twilio documents (HMAC-SHA1 with your auth token over the full URL and sorted POST parameters, compared in constant time), and a per-process random secret that changes on every start. A missing or wrong signature gets a 403. The media stream always checks the secret passed in the stream's start parameters. It also checks `X-Twilio-Signature` when Twilio sends it, but by default only logs a warning on a mismatch, because that check has not been verified against live media-stream traffic; set `TWILIO_STREAM_SIGNATURE=enforce` to reject instead. `TWILIO_SIGNATURE_CHECK=off` disables the HTTP signature check for troubleshooting only. The signature check needs the public tunnel address, which comes from `PUBLIC_BASE` or `data/tunnel.log`. If it cannot be found, requests fail closed.
 
+**Settings page.** For long secrets such as API keys, the Settings page shows the last 4 characters to anyone signed in to the dashboard. Set the dashboard password before you expose the server to anything but your own computer, and treat everyone with that password as able to see those characters.
+
 **Dialing.** Demo mode (the default) lets the bot dial only numbers in `DIAL_ALLOWLIST`. Turning it off with `CONSENT_CONFIRMED=true` is a statement that you hold consent for every number. See [COMPLIANCE.md](COMPLIANCE.md).
 
 ## Where secrets live

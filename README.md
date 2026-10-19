@@ -96,7 +96,7 @@ See [docs/architecture.html](docs/architecture.html) for the component diagram, 
 ## Inbound calls
 
 1. On the Settings page, open **Inbound calls**, switch on **Let the bot answer calls to your Twilio number**, and set the hours, the daily limit and the fallback number.
-2. Press **Point my Twilio number at this server**. It sets the number's webhook to this server and the fallback to your fallback number, so callers still reach a person if the server is down.
+2. Press **Point my Twilio number at this server**. It sets the number's webhook to this server and the fallback to your fallback number, so callers still reach a person if the server is down. That server-down fallback uses Twilio's Twimlets forwarding service, so Twilio's twimlets.com sees the fallback number.
 3. Call your Twilio number.
 
 The bot asks every inbound caller's name and never greets them by a name it looked up. **Look up callers in the CRM** decides which lead gets the application: any lead with the caller's number, only a lead created in the last 30 minutes (for call platforms that post a new lead for each call), or none.
